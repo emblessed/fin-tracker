@@ -11,6 +11,20 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const multer = require('multer');
 
+
+const pdfjsLib = require('pdfjs-dist/legacy/build/pdf.js');
+
+const { 
+    identifyBank, 
+    findDateByOccurrence, 
+    parseDate, 
+    findMoney, 
+    findCategory, 
+    findCommentary,
+    categoryTransform
+} = require('./pdfScan'); // Импортируем функции из pdfScan.js
+
+
 dotenv.config({ path: path.resolve(__dirname, './.env') });
 
 const app = express();
@@ -29,7 +43,145 @@ mongoose.connect(process.env.MONGO_URI)
   })
   .catch((err) => console.error('Connection error:', err));
 
-  // схемы и прочая лабуба
+
+
+//--------------------СКАНИРОВАНИЕ PDF--------------------
+
+async function scanPdf() {
+
+const filePath = './pdf-for-scan/0001.pdf';
+
+const dataBuffer = new Uint8Array(fs.readFileSync(filePath));
+
+const fontPath = path.join(
+        path.dirname(require.resolve('pdfjs-dist/package.json')), 
+        'standard_fonts/'
+    );
+
+    const loadingTask = pdfjsLib.getDocument({
+        data: dataBuffer,
+        standardFontDataUrl: fontPath
+    });
+    
+try {
+        const pdf = await loadingTask.promise;
+        // console.log(`Всего страниц в выписке: ${pdf.numPages}`);
+        const fullDocData = await extractAllPagesData(pdf); 
+        const { bank: detectedBank } = identifyBank(fullDocData);
+
+        // console.log('Выписка из банка: ' + detectedBank);
+        // console.log('Все данные:', fullDocData);
+
+        await aboutTransaction(fullDocData, detectedBank);
+
+        console.log('Обработка полностью завершена');
+    } catch (error) {
+        console.error("Ошибка при сканировании PDF:", error);
+    }
+}
+
+
+async function extractAllPagesData(pdf) {
+    let allItems = [];
+
+    for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const content = await page.getTextContent();
+        
+        const pageItems = content.items.map(item => ({
+            str: item.str,
+            x: item.transform[4],
+            y: item.transform[5],
+            page: i
+        }));
+
+        allItems = allItems.concat(pageItems);
+    }
+    
+    return allItems;
+}
+
+
+
+
+//-------------------ГЛАВНАЯ ФУНКЦИЯ ОБРАБОТКИ ВЫПИСКИ ИЗ БАНКА-------------------
+async function aboutTransaction(docItems, bankName) {
+    const totalPages = docItems.length > 0 ? Math.max(...docItems.map(i => i.page)) : 0;
+    let globalTransactionNum = 1;
+
+    // 1. Поиск номера карты
+    const cardElement = docItems.find(item => 
+        item.page === 1 && 
+        Math.abs(item.x - 60) < 1 &&      
+        Math.abs(item.y - 665.86) < 1 &&
+        item.str &&                               
+        item.str.trim().length > 0   
+    );
+
+    const cardNumber = cardElement 
+        ? cardElement.str.replace(/•+/g, '').replace(/\s+/g, ' ').trim()
+        : "Данные не найдены";
+
+    for (let i = 1; i <= totalPages; i++) {
+        let pageTransactions = [];
+        const currentPageItems = docItems.filter(item => item.page === i);
+
+        const searchMarker = currentPageItems.findIndex(item => 
+            item.str.toUpperCase().includes('ОСТАТОК СРЕДСТВ')
+        );
+
+        if (searchMarker !== -1) {
+            const dataAfterMarker = currentPageItems.slice(searchMarker + 1);
+            let occurrence = 1; 
+            let found = true;
+
+            while (found) {
+              // работа с данными
+                const dateData = findDateByOccurrence(dataAfterMarker, occurrence);
+                const moneyData = findMoney(dataAfterMarker, occurrence);
+                const categoryData = findCategory(dataAfterMarker, occurrence);
+                const commentaryData = findCommentary(dataAfterMarker, occurrence, categoryData);
+                const rawCategory = categoryData || "Не определено";
+
+                const categoryDataTransformed = categoryTransform(rawCategory);
+
+                if (dateData && moneyData) {
+                    // Формируем объект согласно Mongoose Schema
+                    pageTransactions.push({
+                        date: parseDate(dateData.item.str), // Формат Date
+                        amount: moneyData.amount,           // Строка "123.45" (Decimal128 её съест)
+                        balance: moneyData.balance,
+                        category: categoryData,
+                        categoryInfo: categoryDataTransformed,
+                        bank: `${bankName} ${cardNumber}`.trim(),
+                        commentary: commentaryData || "Комментарий не найден",
+                        page: i,
+                        transactionNum: globalTransactionNum++
+                    });
+                    occurrence++; 
+                } else {
+                    found = false; 
+                }
+            }
+        }
+
+        // --- ЗАПИСЬ В БД ПОСТРАНИЧНО ---
+        if (pageTransactions.length > 0) {
+            try {
+                await Transaction.insertMany(pageTransactions); 
+                console.log(`✅ Страница ${i}: сохранено ${pageTransactions.length} транзакций в БД`);
+            } catch (err) {
+                console.error(`❌ Ошибка записи страницы ${i}:`, err);
+            }
+        }
+    }
+}
+
+// -------------------------------------------------------------
+
+
+
+//--------------------МОДЕЛИ ДАННЫХ-------------------
 
 const userSchema = new Schema({
   fullname: { type: String, trim: true },
@@ -46,8 +198,11 @@ const transactionSchema = new Schema({
   amount: Decimal128,
   balance: Decimal128,
   category: String,
+  categoryInfo: String,
   bank: String,
   commentary: String,
+  page: Number,
+  transactionNum: Number,
 });
 
 const fileSchema = new mongoose.Schema({
@@ -61,15 +216,17 @@ const fileSchema = new mongoose.Schema({
 
 const FileModel = mongoose.models.File || mongoose.model('File', fileSchema);
 
+const Transaction = mongoose.models.Transaction || mongoose.model('Transaction', transactionSchema);
 
-// ----------------------------------------------
+
+// ----------------------------------------------------
+
+
+
 
 const uploadsDir = path.resolve(__dirname, './uploads');
 fs.mkdirSync(uploadsDir, { recursive: true });
 
-function getModelbyCategoryName(categoryName) {
-  return mongoose.models[categoryName] || mongoose.model(categoryName, transactionSchema, categoryName);
-}
 
 function buildSafePdfName(originalName) {
   const extension = path.extname(originalName).toLowerCase() || '.pdf';
@@ -297,6 +454,7 @@ app.use((error, _req, res, _next) => {
 });
 
 
+scanPdf()
 
 // ----------------------------------------------
 
