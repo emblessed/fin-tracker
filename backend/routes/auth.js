@@ -1,10 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcrypt');
+const auth = require('../middleware/auth');
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 
-router.post('/register', async (req, res) => {
+router.post('/register',  async (req, res) => {
     try {
         const { fullname, login, email, password, gender } = req.body;
         if (!fullname || !login || !email || !password || !gender) {
@@ -38,7 +39,7 @@ router.post('/register', async (req, res) => {
     }
 });
 
-router.post('/login', async (req, res) => {
+router.post('/login',  async (req, res) => {
     try {
         const { login, password } = req.body;
         if (!login || !password) {

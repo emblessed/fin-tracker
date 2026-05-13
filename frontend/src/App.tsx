@@ -21,6 +21,9 @@ import FamilySettingsPage from './pages/family/pages/FamilySettingsPage.tsx';
 import InvitationsPage from './pages/account/pages/InvitationsPage.tsx';
 import ProfileSettingsPage from './pages/account/pages/ProfileSettingsPage.tsx';
 
+
+import ProtectedRoute from './api/ProtectedRoute.tsx';
+
 type AppRoute = {
   path: string;
   element: ReactNode;
@@ -109,7 +112,10 @@ const publicRoutes: AppRoute[] = [
 const mainRoutes: AppRoute[] = [
   {
     path: '/main',
-    element: <MainPage />,
+    element: 
+    <ProtectedRoute>
+    <MainPage />,
+    </ProtectedRoute>
   },
   {
     path: '/main/analytics',
