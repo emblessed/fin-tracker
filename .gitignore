@@ -4,5 +4,5 @@
 **/.env.local
 html/
 backup/
-**/backend/uploads/
-**/backend/pdf-for-scan/
+backend/uploads/
+backend/pdf-for-scan/
