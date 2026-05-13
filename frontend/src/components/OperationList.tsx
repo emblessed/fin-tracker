@@ -21,7 +21,7 @@ type Operation = {
 };
 
 interface OperationsListProps {
-  transactions: ApiTransaction[]; // Приходят из MainPage после fetch в PeriodSelector
+  transactions: ApiTransaction[]; 
 }
 
 const rowMenuStyle: React.CSSProperties = {
