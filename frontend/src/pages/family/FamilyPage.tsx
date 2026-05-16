@@ -1,6 +1,14 @@
-import { useMemo, useState, type FormEvent } from 'react';
-import { Link } from 'react-router-dom';
-import Header from '../../components/Header';
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+
+import { BankStatementUploadRow } from '../../components/bank-statement';
+import {
+  createFamily,
+  getFamilyStatus,
+  sendFamilyInvitation,
+  type Family,
+  type FamilyMember as ApiFamilyMember,
+} from '../../api/family';
 
 export type FamilyPageVariant = 'menu' | 'prompt' | 'create' | 'settings';
 
@@ -8,15 +16,14 @@ type FamilyPageProps = {
   variant?: FamilyPageVariant;
 };
 
-type FamilyMember = {
-  id: number;
+type FamilyMemberView = {
+  id: string;
   name: string;
   role: string;
   initials: string;
   balance: number;
   income: number;
   expenses: number;
-  color: 'blue' | 'green' | 'orange' | 'purple';
 };
 
 type FamilyOperation = {
@@ -34,44 +41,11 @@ type BudgetItem = {
   limit: number;
 };
 
-const members: FamilyMember[] = [
-  {
-    id: 1,
-    name: 'Олег Зуев',
-    role: 'Владелец',
-    initials: 'ОЗ',
-    balance: 76000,
-    income: 125000,
-    expenses: 49000,
-    color: 'blue',
-  },
-  {
-    id: 2,
-    name: 'Анна Зуева',
-    role: 'Участник',
-    initials: 'АЗ',
-    balance: 42000,
-    income: 73000,
-    expenses: 31000,
-    color: 'green',
-  },
-  {
-    id: 3,
-    name: 'Семейный счёт',
-    role: 'Общий бюджет',
-    initials: 'С',
-    balance: 118000,
-    income: 198000,
-    expenses: 80000,
-    color: 'purple',
-  },
-];
-
-const operations: FamilyOperation[] = [
+const fallbackOperations: FamilyOperation[] = [
   {
     id: 1,
     title: 'Зарплата',
-    member: 'Олег Зуев',
+    member: 'Владелец семьи',
     category: 'Доходы',
     date: '15.05.2026',
     amount: 115670,
@@ -79,7 +53,7 @@ const operations: FamilyOperation[] = [
   {
     id: 2,
     title: 'Продукты',
-    member: 'Анна Зуева',
+    member: 'Семейный бюджет',
     category: 'Супермаркеты',
     date: '14.05.2026',
     amount: -8230,
@@ -87,7 +61,7 @@ const operations: FamilyOperation[] = [
   {
     id: 3,
     title: 'Перевод на общий счёт',
-    member: 'Олег Зуев',
+    member: 'Владелец семьи',
     category: 'Переводы',
     date: '13.05.2026',
     amount: -15000,
@@ -95,7 +69,7 @@ const operations: FamilyOperation[] = [
   {
     id: 4,
     title: 'Оплата квартиры',
-    member: 'Семейный счёт',
+    member: 'Семейный бюджет',
     category: 'Дом',
     date: '12.05.2026',
     amount: -42000,
@@ -129,307 +103,442 @@ const formatMoney = (value: number) =>
     maximumFractionDigits: 0,
   }).format(value);
 
+const getMemberName = (member: ApiFamilyMember) =>
+  member.fullname?.trim() || member.login?.trim() || member.email?.trim() || 'Участник семьи';
+
+const getInitials = (name: string) => {
+  const words = name.trim().split(/\s+/).filter(Boolean);
+
+  if (words.length >= 2) {
+    return `${words[0][0]}${words[1][0]}`.toUpperCase();
+  }
+
+  return name.trim().slice(0, 1).toUpperCase() || 'У';
+};
+
+const memberRoleText = (role: ApiFamilyMember['role']) =>
+  role === 'owner' ? 'Владелец' : 'Участник';
+
 export function FamilyPage({ variant = 'menu' }: FamilyPageProps) {
+  const navigate = useNavigate();
+
   const [selectedPeriod, setSelectedPeriod] = useState('Все время');
-  const [familyName, setFamilyName] = useState('Семья Зуевых');
+  const [family, setFamily] = useState<Family | null>(null);
+  const [familyName, setFamilyName] = useState('');
   const [inviteEmail, setInviteEmail] = useState('');
   const [notice, setNotice] = useState('');
+  const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+
+  const loadFamily = useCallback(async () => {
+    setIsLoading(true);
+    setError('');
+
+    try {
+      const status = await getFamilyStatus();
+      setFamily(status.family);
+      setFamilyName(status.family?.name || '');
+    } catch (loadError: any) {
+      setError(loadError.message || 'Не удалось загрузить семейный доступ');
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadFamily();
+  }, [loadFamily]);
+
+  const visibleMembers = useMemo<FamilyMemberView[]>(() => {
+    if (!family?.members?.length) {
+      return [];
+    }
+
+    return family.members.map((member, index) => {
+      const name = getMemberName(member);
+      const isOwner = member.role === 'owner';
+      const balance = isOwner ? 76000 : 42000 + index * 7000;
+      const income = isOwner ? 125000 : 73000 + index * 5000;
+      const expenses = isOwner ? 49000 : 31000 + index * 3000;
+
+      return {
+        id: member.id || String(index),
+        name,
+        role: memberRoleText(member.role),
+        initials: getInitials(name),
+        balance,
+        income,
+        expenses,
+      };
+    });
+  }, [family]);
+
+  const visibleOperations = useMemo(() => {
+    const ownerName = visibleMembers.find((member) => member.role === 'Владелец')?.name || 'Владелец семьи';
+
+    return fallbackOperations.map((operation) =>
+      operation.member === 'Владелец семьи'
+        ? {
+            ...operation,
+            member: ownerName,
+          }
+        : operation,
+    );
+  }, [visibleMembers]);
 
   const totals = useMemo(
     () => ({
-      balance: members.reduce((sum, member) => sum + member.balance, 0),
-      income: members.reduce((sum, member) => sum + member.income, 0),
-      expenses: members.reduce((sum, member) => sum + member.expenses, 0),
+      balance: visibleMembers.reduce((sum, member) => sum + member.balance, 0),
+      income: visibleMembers.reduce((sum, member) => sum + member.income, 0),
+      expenses: visibleMembers.reduce((sum, member) => sum + member.expenses, 0),
     }),
-    [],
+    [visibleMembers],
   );
 
-  const closeLink = '/family';
+  const closeLink = family ? '/family' : '/family/create';
 
-  const handleCreateFamily = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    setNotice(`Семья «${familyName}» сохранена`);
+  const notifyFamilyChanged = () => {
+    window.dispatchEvent(new Event('family:changed'));
+    window.dispatchEvent(new Event('invitations:changed'));
   };
 
-  const handleInvite = (event: FormEvent<HTMLFormElement>) => {
+  const handleCreateFamily = async (event: FormEvent) => {
     event.preventDefault();
+    setNotice('');
+    setError('');
+    setIsSaving(true);
+
+    try {
+      const result = await createFamily(familyName || '');
+      setFamily(result.family);
+      setFamilyName(result.family.name);
+      setNotice('Семья создана');
+      notifyFamilyChanged();
+      navigate('/family', { replace: true });
+    } catch (createError: any) {
+      setError(createError.message || 'Не удалось создать семью');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleInvite = async (event: FormEvent) => {
+    event.preventDefault();
+    setNotice('');
+    setError('');
 
     if (!inviteEmail.trim()) {
-      setNotice('Введите email участника');
+      setError('Введите email участника');
       return;
     }
 
-    setNotice(`Приглашение отправлено на ${inviteEmail}`);
-    setInviteEmail('');
+    setIsSaving(true);
+
+    try {
+      await sendFamilyInvitation(inviteEmail);
+      setNotice(`Приглашение отправлено на ${inviteEmail.trim()}`);
+      setInviteEmail('');
+      notifyFamilyChanged();
+    } catch (inviteError: any) {
+      setError(inviteError.message || 'Не удалось отправить приглашение');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
+  const renderCreateFamilyPanel = () => (
+    <section
+      className="panel periods-card"
+      style={{
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        minHeight: 360,
+        padding: '40px 24px',
+      }}
+    >
+      <div style={{ width: '100%', maxWidth: 520 }}>
+        <h1
+          className="section-title"
+          style={{
+            color: '#0f5f94',
+            fontSize: 34,
+            lineHeight: 1.2,
+            margin: 0,
+            textAlign: 'center',
+          }}
+        >
+          Создать семью
+        </h1>
+
+        <p className="member-mail" style={{ marginTop: 14, textAlign: 'center' }}>
+          Создание семьи позволит вам приглашать участников в семью и вести совместный бюджет
+        </p>
+
+        <form onSubmit={handleCreateFamily} style={{ marginTop: 28, width: '100%' }}>
+          <label className="field-label large" htmlFor="familyNameInline">
+            Название семьи
+          </label>
+          <input
+            className="input-shell"
+            id="familyNameInline"
+            value={familyName}
+            onChange={(event) => setFamilyName(event.target.value)}
+            placeholder="Например, Семья Ивановых"
+          />
+
+          {error && <p className="profile-error">{error}</p>}
+          {notice && <p className="profile-success">{notice}</p>}
+
+          <div className="modal-actions" style={{ justifyContent: 'center', width: '100%' }}>
+            <button className="primary-button" type="submit" disabled={isSaving}>
+              {isSaving ? 'Создание...' : 'Создать семью'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </section>
+  );
+
+  if (isLoading) {
+    return (
+      <section className="panel periods-card">
+        <p className="member-mail">Загрузка семейного доступа...</p>
+      </section>
+    );
+  }
+
+  if (!family) {
+    return renderCreateFamilyPanel();
+  }
+
   return (
-    <div className="app-shell family-redesign-shell">
-      <Header userName="Олег Зуев" />
+    <>
+      {family ? (
+        <>
+          <section className="panel periods-card">
+            <h1
+              className="section-title"
+              style={{
+                color: '#0f5f94',
+                fontSize: 34,
+                lineHeight: 1.2,
+                margin: 0,
+              }}
+            >
+              {family.name}
+            </h1>
 
-      <main className="family-page">
-        <section className="family-hero panel">
-          <div className="family-hero__content">
-            <p className="family-hero__eyebrow">Баланс+ · семейный доступ</p>
-            <h1>Семья Олега</h1>
-            <p>
-              Общий бюджет, участники, лимиты и последние операции в одном аккуратном
-              разделе.
-            </p>
+            <BankStatementUploadRow style={{ marginTop: 18 }} />
+          </section>
 
-            <div className="family-hero__actions">
-              <Link className="family-primary-action" to="/family/create">
-                Создать семью
-              </Link>
-              <Link className="family-secondary-action" to="/family/settings">
-                Настройки
-              </Link>
-            </div>
-          </div>
-        </section>
+          <section className="stats-row" style={{ marginTop: 16 }}>
+            <article className="panel stat-card">
+              <div className="stat-label">Общий баланс</div>
+              <div className="stat-value">{formatMoney(totals.balance)}</div>
+            </article>
 
-        <section className="family-stats">
-          <article className="family-stat-card panel">
-            <span>Общий баланс</span>
-            <strong>{formatMoney(totals.balance)}</strong>
-          </article>
+            <article className="panel stat-card">
+              <div className="stat-label">Доходы семьи</div>
+              <div className="stat-value green">{formatMoney(totals.income)}</div>
+            </article>
 
-          <article className="family-stat-card panel family-stat-card--income">
-            <span>Доходы семьи</span>
-            <strong>{formatMoney(totals.income)}</strong>
-          </article>
+            <article className="panel stat-card">
+              <div className="stat-label">Расходы семьи</div>
+              <div className="stat-value red">{formatMoney(totals.expenses)}</div>
+            </article>
+          </section>
 
-          <article className="family-stat-card panel family-stat-card--expense">
-            <span>Расходы семьи</span>
-            <strong>{formatMoney(totals.expenses)}</strong>
-          </article>
-        </section>
+          <main className="dashboard-grid" style={{ marginTop: 16 }}>
+            <div className="left-stack">
+              <section className="panel periods-card">
+                <h2 className="section-title period-title">Периоды</h2>
 
-        <section className="family-layout">
-          <div className="family-left-column">
-            <section className="family-period-card panel">
-              <div className="family-section-heading">
-                <h2>Периоды</h2>
-                <span>{selectedPeriod}</span>
-              </div>
+                <div className="chips-row">
+                  {periodOptions.map((period) => (
+                    <button
+                      className={`period-chip ${selectedPeriod === period ? 'active' : ''}`}
+                      key={period}
+                      type="button"
+                      onClick={() => setSelectedPeriod(period)}
+                    >
+                      {period}
+                    </button>
+                  ))}
+                </div>
 
-              <div className="family-period-chips">
-                {periodOptions.map((period) => (
-                  <button
-                    key={period}
-                    type="button"
-                    className={selectedPeriod === period ? 'active' : ''}
-                    onClick={() => setSelectedPeriod(period)}
-                  >
-                    {period}
+                <div className="dates-row" style={{ marginTop: 16 }}>
+                  <span className="date-field">С</span>
+                  <span className="date-dash">—</span>
+                  <span className="date-field">По</span>
+                  <button className="action-light" type="button">
+                    Применить
                   </button>
-                ))}
-              </div>
+                </div>
+              </section>
 
-              <div className="family-date-row">
-                <label>
-                  <span>С</span>
-                  <input type="date" defaultValue="2000-01-01" />
-                </label>
+              <section className="panel periods-card">
+                <div className="chips-row" style={{ justifyContent: 'space-between' }}>
+                  <h2 className="section-title period-title">Участники</h2>
 
-                <span className="family-date-row__dash">—</span>
+                  <Link className="mini-light-button" to="/family/prompt">
+                    <span className="plus">＋</span>
+                    Пригласить
+                  </Link>
+                </div>
 
-                <label>
-                  <span>По</span>
-                  <input type="date" defaultValue="2026-05-13" />
-                </label>
-              </div>
-
-              <button className="family-soft-button" type="button">
-                Применить
-              </button>
-            </section>
-
-            <section className="family-members-card panel">
-              <div className="family-section-heading">
-                <h2>Участники</h2>
-                <Link to="/family/prompt">Пригласить</Link>
-              </div>
-
-              <div className="family-members-list">
-                {members.map((member) => (
-                  <article className="family-member-card" key={member.id}>
-                    <span className={`family-avatar family-avatar--${member.color}`}>
-                      {member.initials}
-                    </span>
-
-                    <div className="family-member-card__main">
-                      <strong>{member.name}</strong>
-                      <span>{member.role}</span>
-                    </div>
-
-                    <strong className="family-member-card__balance">
-                      {formatMoney(member.balance)}
-                    </strong>
-                  </article>
-                ))}
-              </div>
-            </section>
-          </div>
-
-          <div className="family-right-column">
-            <section className="family-budgets-card panel">
-              <div className="family-section-heading">
-                <h2>Лимиты по категориям</h2>
-                <span>Май</span>
-              </div>
-
-              <div className="family-budget-list">
-                {budgets.map((budget) => {
-                  const percent = Math.min(Math.round((budget.spent / budget.limit) * 100), 100);
-
-                  return (
-                    <article className="family-budget-row" key={budget.title}>
+                <div className="member-list">
+                  {visibleMembers.map((member) => (
+                    <article className={`member-card ${member.role === 'Владелец' ? 'owner' : ''}`} key={member.id}>
                       <div>
-                        <strong>{budget.title}</strong>
-                        <span>
-                          {formatMoney(budget.spent)} из {formatMoney(budget.limit)}
-                        </span>
+                        <div className="member-name">{member.name}</div>
+                        <div className="member-mail">{member.role}</div>
                       </div>
 
-                      <div className="family-budget-progress">
-                        <span style={{ width: `${percent}%` }} />
-                      </div>
-
-                      <strong>{percent}%</strong>
+                      <strong className="stat-value" style={{ fontSize: 20 }}>
+                        {formatMoney(member.balance)}
+                      </strong>
                     </article>
-                  );
-                })}
-              </div>
-            </section>
+                  ))}
+                </div>
+              </section>
+            </div>
 
-            <section className="family-operations-card panel">
-              <div className="family-section-heading">
-                <h2>Последние операции</h2>
-                <span>{operations.length}</span>
-              </div>
+            <aside className="right-stack">
+              <section className="panel periods-card">
+                <div className="chips-row" style={{ justifyContent: 'space-between' }}>
+                  <h2 className="section-title period-title">Лимиты по категориям</h2>
+                  <span className="small-badge">Май</span>
+                </div>
 
-              <div className="family-operations-list">
-                {operations.map((operation) => (
-                  <article className="family-operation-row" key={operation.id}>
-                    <div
-                      className={`family-operation-row__icon ${
-                        operation.amount > 0 ? 'income' : 'expense'
-                      }`}
-                    >
-                      {operation.amount > 0 ? '+' : '−'}
-                    </div>
+                <div className="member-list">
+                  {budgets.map((budget) => {
+                    const percent = Math.min(Math.round((budget.spent / budget.limit) * 100), 100);
 
-                    <div className="family-operation-row__main">
-                      <strong>{operation.title}</strong>
-                      <span>
-                        {operation.member} · {operation.category}
-                      </span>
-                    </div>
+                    return (
+                      <div className="invite-card" key={budget.title}>
+                        <div className="chips-row" style={{ justifyContent: 'space-between' }}>
+                          <strong>{budget.title}</strong>
+                          <span>{percent}%</span>
+                        </div>
 
-                    <time>{operation.date}</time>
+                        <p className="member-mail">
+                          {formatMoney(budget.spent)} из {formatMoney(budget.limit)}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
 
-                    <strong
-                      className={`family-operation-row__amount ${
-                        operation.amount > 0 ? 'income' : 'expense'
-                      }`}
-                    >
-                      {formatMoney(operation.amount)}
-                    </strong>
-                  </article>
-                ))}
-              </div>
-            </section>
-          </div>
-        </section>
-      </main>
+              <section className="panel periods-card">
+                <div className="chips-row" style={{ justifyContent: 'space-between' }}>
+                  <h2 className="section-title period-title">Последние операции</h2>
+                  <span className="small-badge">{visibleOperations.length}</span>
+                </div>
 
-      {variant === 'prompt' && (
-        <div className="family-modal-backdrop">
-          <form className="family-modal panel" onSubmit={handleInvite}>
-            <Link className="family-modal__close" to={closeLink} aria-label="Закрыть">
+                <div className="member-list">
+                  {visibleOperations.map((operation) => (
+                    <article className="member-card" key={operation.id}>
+                      <div>
+                        <div className="member-name">{operation.title}</div>
+                        <div className="member-mail">
+                          {operation.member} · {operation.category}
+                        </div>
+                        <div className="member-mail">{operation.date}</div>
+                      </div>
+
+                      <strong className={`stat-value ${operation.amount > 0 ? 'green' : 'red'}`} style={{ fontSize: 20 }}>
+                        {formatMoney(operation.amount)}
+                      </strong>
+                    </article>
+                  ))}
+                </div>
+              </section>
+            </aside>
+          </main>
+        </>
+      ) : (
+        renderCreateFamilyPanel()
+      )}
+
+      {variant === 'prompt' && family && (
+        <div className="overlay">
+          <form className="modal" onSubmit={handleInvite}>
+            <Link className="close-link" to={closeLink}>
               ×
             </Link>
 
-            <p className="family-modal__eyebrow">Приглашение</p>
-            <h2>Добавить участника</h2>
-            <p>
+            <p className="stat-label">Приглашение</p>
+            <h2 className="modal-title">Добавить участника</h2>
+            <p className="modal-text">
               Укажи email человека, которого нужно подключить к семейному бюджету.
             </p>
 
-            <label className="family-field">
-              <span>Email</span>
-              <input
-                type="email"
-                value={inviteEmail}
-                onChange={(event) => setInviteEmail(event.target.value)}
-                placeholder="name@example.com"
-              />
+            <label className="field-label large" htmlFor="inviteEmail" style={{ marginTop: 24 }}>
+              Email
             </label>
+            <input
+              className="input-shell"
+              id="inviteEmail"
+              type="email"
+              value={inviteEmail}
+              onChange={(event) => setInviteEmail(event.target.value)}
+              placeholder="name@example.com"
+            />
 
-            {notice && <div className="family-notice">{notice}</div>}
+            {error && <p className="profile-error">{error}</p>}
+            {notice && <p className="profile-success">{notice}</p>}
 
-            <button className="family-primary-action" type="submit">
-              Отправить приглашение
-            </button>
+            <div className="modal-actions">
+              <button className="primary-button" type="submit" disabled={isSaving}>
+                {isSaving ? 'Отправка...' : 'Отправить приглашение'}
+              </button>
+            </div>
           </form>
         </div>
       )}
 
-      {variant === 'create' && (
-        <div className="family-modal-backdrop">
-          <form className="family-modal panel" onSubmit={handleCreateFamily}>
-            <Link className="family-modal__close" to={closeLink} aria-label="Закрыть">
+      {variant === 'settings' && family && (
+        <div className="overlay">
+          <section className="modal">
+            <Link className="close-link" to={closeLink}>
               ×
             </Link>
 
-            <p className="family-modal__eyebrow">Новая семья</p>
-            <h2>Создать семейный бюджет</h2>
-            <p>
-              Название будет отображаться в общем разделе и настройках семейного доступа.
+            <p className="stat-label">Настройки</p>
+            <h2 className="modal-title">Настройки семьи</h2>
+            <p className="modal-text">
+              Управление участниками, правами доступа и общим бюджетом.
             </p>
 
-            <label className="family-field">
-              <span>Название семьи</span>
-              <input
-                value={familyName}
-                onChange={(event) => setFamilyName(event.target.value)}
-                placeholder="Например, Семья Зуевых"
-              />
-            </label>
+            <div className="member-list" style={{ marginTop: 24 }}>
+              <div className="soft-row">
+                <span>Название семьи</span>
+                <strong>{family.name}</strong>
+              </div>
 
-            {notice && <div className="family-notice">{notice}</div>}
+              <button className="soft-row" type="button">
+                Переименовать семью
+              </button>
 
-            <button className="family-primary-action" type="submit">
-              Создать
-            </button>
-          </form>
-        </div>
-      )}
+              <button className="soft-row" type="button">
+                Настроить лимиты
+              </button>
 
-      {variant === 'settings' && (
-        <div className="family-modal-backdrop">
-          <section className="family-modal family-settings-modal panel">
-            <Link className="family-modal__close" to={closeLink} aria-label="Закрыть">
-              ×
-            </Link>
+              <button className="soft-row" type="button">
+                Права участников
+              </button>
 
-            <p className="family-modal__eyebrow">Настройки</p>
-            <h2>Настройки семьи</h2>
-            <p>Управление участниками, правами доступа и общим бюджетом.</p>
-
-            <div className="family-settings-list">
-              <button type="button">Переименовать семью</button>
-              <button type="button">Настроить лимиты</button>
-              <button type="button">Права участников</button>
-              <button type="button" className="danger">
+              <button className="soft-row danger-link" type="button">
                 Покинуть семью
               </button>
             </div>
           </section>
         </div>
       )}
-    </div>
+    </>
   );
 }
 

@@ -1,49 +1,63 @@
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
-
-const API_URL = 'http://localhost:5000';
-
-export const registerUser = async (userData: any) => {
-  try {
-    const response = await fetch(`${API_URL}/api/auth/register`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(userData),
-    });
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      // Передаем ошибку из бэкенда дальше
-      throw new Error(data.message || 'Ошибка при регистрации');
-    }
-
-    return data; // Возвращаем успешный ответ
-  } catch (error) {
-    throw error;
-  }
+type RequestOptions = {
+  method?: string;
+  body?: unknown;
+  auth?: boolean;
 };
 
+async function request(endpoint: string, options: RequestOptions = {}) {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
 
+  if (options.auth) {
+    const token = localStorage.getItem('token');
+
+    if (token) {
+      headers.Authorization = `Bearer ${token}`;
+    }
+  }
+
+  const response = await fetch(`${API_URL}${endpoint}`, {
+    method: options.method || 'GET',
+    headers,
+    body: options.body ? JSON.stringify(options.body) : undefined,
+  });
+
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw new Error(data.message || 'Ошибка запроса');
+  }
+
+  return data;
+}
+
+export const registerUser = async (userData: any) => {
+  return request('/api/auth/register', {
+    method: 'POST',
+    body: userData,
+  });
+};
 
 export const loginUser = async (credentials: any) => {
-  try {
-    const response = await fetch(`${API_URL}/api/auth/login`, { 
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(credentials),
-    });
+  return request('/api/auth/login', {
+    method: 'POST',
+    body: credentials,
+  });
+};
 
-    const data = await response.json();
+export const getCurrentUser = async () => {
+  return request('/api/auth/me', {
+    auth: true,
+  });
+};
 
-    if (!response.ok) {
-      throw new Error(data.message || 'Ошибка при входе');
-    }
-    return data;
-  } catch (error) {
-    throw error;
-  }
+export const updateCurrentUser = async (userData: any) => {
+  return request('/api/auth/me', {
+    method: 'PATCH',
+    body: userData,
+    auth: true,
+  });
 };

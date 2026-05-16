@@ -1,21 +1,22 @@
 import { ChartsColumn } from './ChartsColumn';
 import { Footer } from './Footer';
-import { Header, type HeaderMode } from './Header';
 import { LeftDashboardColumn } from './LeftDashboardColumn';
 
+export type HeaderMode = 'family' | 'user';
+
 type DashboardLayoutProps = {
-  headerMode: HeaderMode;
+  headerMode?: HeaderMode;
 };
 
-export function DashboardLayout({ headerMode }: DashboardLayoutProps) {
+export function DashboardLayout({ headerMode: _headerMode }: DashboardLayoutProps) {
   return (
-    <div className="app-shell">
-      <Header mode={headerMode} />
+    <>
       <div className="dashboard-grid">
         <LeftDashboardColumn />
         <ChartsColumn />
       </div>
+
       <Footer />
-    </div>
+    </>
   );
 }

@@ -2,10 +2,8 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 
 import './App.css';
-
 import Register from './register/register.tsx';
 import SignedUp from './login/login.tsx';
-
 import Header from './components/Header.tsx';
 import OperationForm from './components/OperationForm.tsx';
 import OperationsList from './components/OperationList.tsx';
@@ -13,18 +11,10 @@ import CategoryChart from './components/CategoryChart.tsx';
 import PeriodSelector from './components/PeriodSelector.tsx';
 import StatsCards from './components/StatsCards.tsx';
 import { BankStatementUploadRow } from './components/bank-statement';
-
 import AnalyticsPage from './pages/analytics/AnalyticsPage.tsx';
 import AdminUploadPage from './pages/admin/AdminUploadPage.tsx';
-
-import FamilyMenuPage from './pages/family/pages/FamilyMenuPage.tsx';
-import FamilyPromptPage from './pages/family/pages/FamilyPromptPage.tsx';
-import FamilyCreateModalPage from './pages/family/pages/FamilyCreateModalPage.tsx';
-import FamilySettingsPage from './pages/family/pages/FamilySettingsPage.tsx';
-
-import InvitationsPage from './pages/account/pages/InvitationsPage.tsx';
+import { FamilyPage } from './pages/family/FamilyPage.tsx';
 import ProfileSettingsPage from './pages/account/pages/ProfileSettingsPage.tsx';
-
 import ProtectedRoute from './api/ProtectedRoute.tsx';
 
 type AppRoute = {
@@ -75,13 +65,12 @@ const PageWithHeader = ({ children, defaultMenuOpen = false }: PageWithHeaderPro
   return (
     <ProtectedRoute>
       <div className="app-shell">
-        <Header defaultMenuOpen={defaultMenuOpen} userName={''} />
+        <Header defaultMenuOpen={defaultMenuOpen} />
         {children}
       </div>
     </ProtectedRoute>
   );
 };
-
 
 const MainPage = ({ defaultMenuOpen: _defaultMenuOpen = false }: MainPageProps) => {
   const [stats, setStats] = useState<Stats>({
@@ -108,11 +97,12 @@ const MainPage = ({ defaultMenuOpen: _defaultMenuOpen = false }: MainPageProps) 
       url.searchParams.set('sortBy', 'date');
       url.searchParams.set('order', 'desc');
 
-      // ИСПРАВЛЕНИЕ: Передаем токен авторизации для обычного GET-запроса
+      const token = localStorage.getItem('token');
+
       const response = await fetch(url.toString(), {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
+          Authorization: `Bearer ${token}`,
+        },
       });
 
       if (!response.ok) {
@@ -154,7 +144,6 @@ const MainPage = ({ defaultMenuOpen: _defaultMenuOpen = false }: MainPageProps) 
             expenses={formatCurrency(stats.expenses)}
           />
 
-          {/* ИСПРАВЛЕНИЕ: Передаем функцию обновления сюда */}
           <BankStatementUploadRow onUploadSuccess={loadTransactions} />
 
           <OperationForm onCreated={loadTransactions} />
@@ -181,7 +170,6 @@ const MainPage = ({ defaultMenuOpen: _defaultMenuOpen = false }: MainPageProps) 
     </>
   );
 };
-
 
 const publicRoutes: AppRoute[] = [
   {
@@ -257,7 +245,7 @@ const familyRoutes: AppRoute[] = [
     path: '/family',
     element: (
       <PageWithHeader>
-        <FamilyMenuPage />
+        <FamilyPage variant="menu" />
       </PageWithHeader>
     ),
   },
@@ -265,7 +253,7 @@ const familyRoutes: AppRoute[] = [
     path: '/family/main',
     element: (
       <PageWithHeader>
-        <FamilyMenuPage />
+        <FamilyPage variant="menu" />
       </PageWithHeader>
     ),
   },
@@ -273,7 +261,7 @@ const familyRoutes: AppRoute[] = [
     path: '/family/prompt',
     element: (
       <PageWithHeader>
-        <FamilyPromptPage />
+        <FamilyPage variant="prompt" />
       </PageWithHeader>
     ),
   },
@@ -281,7 +269,7 @@ const familyRoutes: AppRoute[] = [
     path: '/family/create',
     element: (
       <PageWithHeader>
-        <FamilyCreateModalPage />
+        <FamilyPage variant="create" />
       </PageWithHeader>
     ),
   },
@@ -289,7 +277,7 @@ const familyRoutes: AppRoute[] = [
     path: '/family/settings',
     element: (
       <PageWithHeader>
-        <FamilySettingsPage />
+        <FamilyPage variant="settings" />
       </PageWithHeader>
     ),
   },
@@ -297,26 +285,10 @@ const familyRoutes: AppRoute[] = [
 
 const accountRoutes: AppRoute[] = [
   {
-    path: '/account/invitations',
-    element: (
-      <PageWithHeader>
-        <InvitationsPage />
-      </PageWithHeader>
-    ),
-  },
-  {
     path: '/account/profile-settings',
     element: (
       <PageWithHeader>
         <ProfileSettingsPage />
-      </PageWithHeader>
-    ),
-  },
-  {
-    path: '/invitations',
-    element: (
-      <PageWithHeader>
-        <InvitationsPage />
       </PageWithHeader>
     ),
   },
