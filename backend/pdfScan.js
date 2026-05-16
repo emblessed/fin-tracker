@@ -155,6 +155,8 @@ const rawLower = bankCategory.toLowerCase();
     return cleanCategory;
 }
 
+
+
 // Экспортируем все функции
 module.exports = {
     identifyBank,

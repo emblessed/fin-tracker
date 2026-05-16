@@ -1,18 +1,28 @@
 const jwt = require('jsonwebtoken');
 
-module.exports = (req, res, next) => {
-    const authHeader = req.header('Authorization');
-    const token = authHeader && authHeader.split(' ')[1];
+module.exports = function (req, res, next) {
 
+  const authHeader = req.header('Authorization');
+
+  if (!authHeader) {
+    return res.status(401).json({ message: 'Нет токена, авторизация отклонена' });
+  }
+
+  try {
+
+    const token = authHeader.split(' ')[1]; 
+    
     if (!token) {
-        return res.status(401).json({ message: 'Нет токена, авторизация отклонена' });
+      return res.status(401).json({ message: 'Некорректный формат токена' });
     }
 
-    try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        req.user = decoded; 
-        next(); 
-    } catch (e) {
-        res.status(401).json({ message: 'Токен не валиден' });
-    }
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    
+    req.user = decoded; 
+    
+    next();
+  } catch (error) {
+    console.error('JWT Verification Error:', error.message);
+    res.status(401).json({ message: 'Токен не валиден или просрочен' });
+  }
 };

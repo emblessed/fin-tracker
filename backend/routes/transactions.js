@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const Transaction = require('../models/Transaction');
+const auth = require('../middleware/auth');
+const mongoose = require('mongoose');
 
 const allowedSortFields = ['date', 'amount', 'balance', 'transactionNum', 'createdAt', 'updatedAt'];
 
@@ -35,7 +37,7 @@ const getNextTransactionNum = async () => {
   return (lastTransaction?.transactionNum || 0) + 1;
 };
 
-const buildTransactionPayload = (body) => {
+const buildTransactionPayload = (body, userId) => {
   const amount = Number(body.amount);
 
   if (!Number.isFinite(amount)) {
@@ -56,12 +58,15 @@ const buildTransactionPayload = (body) => {
     commentary: body.commentary || '',
     page: body.page,
     fileId: body.fileId,
-    userId: body.userId,
+    userId: userId
   };
 };
 
 // GET /api/transactions
-router.get('/', async (req, res) => {
+router.get('/', auth, async (req, res) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
   try {
     const page = parseInt(req.query.page, 10) || 1;
     const limit = parseInt(req.query.limit, 10) || 50;
@@ -73,8 +78,15 @@ router.get('/', async (req, res) => {
     const safePage = Math.max(1, page);
     const safeLimit = Math.max(1, Math.min(200, limit));
     const skip = (safePage - 1) * safeLimit;
+
     const { dateFrom, dateTo } = req.query;
     const query = normalizeDateRange(dateFrom, dateTo);
+
+    if (req.user && req.user.userId) {
+      query.userId = new mongoose.Types.ObjectId(req.user.userId);
+    } else {
+      return res.status(401).json({ message: 'Пользователь не авторизован' });
+    }
 
     const transactions = await Transaction.find(query)
       .sort({
@@ -131,9 +143,10 @@ router.get('/', async (req, res) => {
 });
 
 // POST /api/transactions
-router.post('/', async (req, res) => {
+router.post('/', auth, async (req, res) => { 
   try {
-    const payload = buildTransactionPayload(req.body);
+    const payload = buildTransactionPayload(req.body, req.user.userId);
+    
     const transaction = await Transaction.create({
       ...payload,
       transactionNum: await getNextTransactionNum(),

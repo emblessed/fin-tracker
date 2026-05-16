@@ -5,21 +5,25 @@ import './App.css';
 
 import Register from './register/register.tsx';
 import SignedUp from './login/login.tsx';
+
 import Header from './components/Header.tsx';
 import OperationForm from './components/OperationForm.tsx';
 import OperationsList from './components/OperationList.tsx';
 import CategoryChart from './components/CategoryChart.tsx';
 import PeriodSelector from './components/PeriodSelector.tsx';
 import StatsCards from './components/StatsCards.tsx';
+import { BankStatementUploadRow } from './components/bank-statement';
+
 import AnalyticsPage from './pages/analytics/AnalyticsPage.tsx';
 import AdminUploadPage from './pages/admin/AdminUploadPage.tsx';
+
 import FamilyMenuPage from './pages/family/pages/FamilyMenuPage.tsx';
 import FamilyPromptPage from './pages/family/pages/FamilyPromptPage.tsx';
 import FamilyCreateModalPage from './pages/family/pages/FamilyCreateModalPage.tsx';
 import FamilySettingsPage from './pages/family/pages/FamilySettingsPage.tsx';
+
 import InvitationsPage from './pages/account/pages/InvitationsPage.tsx';
 import ProfileSettingsPage from './pages/account/pages/ProfileSettingsPage.tsx';
-
 
 import ProtectedRoute from './api/ProtectedRoute.tsx';
 
@@ -29,6 +33,11 @@ type AppRoute = {
 };
 
 type MainPageProps = {
+  defaultMenuOpen?: boolean;
+};
+
+type PageWithHeaderProps = {
+  children: ReactNode;
   defaultMenuOpen?: boolean;
 };
 
@@ -62,13 +71,24 @@ const formatCurrency = (value: number) =>
     maximumFractionDigits: 0,
   }).format(value);
 
-const MainPage = ({ defaultMenuOpen = false }: MainPageProps) => {
+const PageWithHeader = ({ children, defaultMenuOpen = false }: PageWithHeaderProps) => {
+  return (
+    <ProtectedRoute>
+      <div className="app-shell">
+        <Header defaultMenuOpen={defaultMenuOpen} userName={''} />
+        {children}
+      </div>
+    </ProtectedRoute>
+  );
+};
+
+
+const MainPage = ({ defaultMenuOpen: _defaultMenuOpen = false }: MainPageProps) => {
   const [stats, setStats] = useState<Stats>({
     balance: 0,
     income: 0,
     expenses: 0,
   });
-
   const [transactions, setTransactions] = useState<Transaction[]>([]);
 
   const handleDataUpdate = useCallback((result: TransactionsResponse) => {
@@ -88,14 +108,18 @@ const MainPage = ({ defaultMenuOpen = false }: MainPageProps) => {
       url.searchParams.set('sortBy', 'date');
       url.searchParams.set('order', 'desc');
 
-      const response = await fetch(url.toString());
+      // ИСПРАВЛЕНИЕ: Передаем токен авторизации для обычного GET-запроса
+      const response = await fetch(url.toString(), {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
 
       if (!response.ok) {
         throw new Error('Ошибка загрузки операций');
       }
 
       const result = await response.json();
-
       handleDataUpdate(result);
     } catch (error) {
       console.error('Ошибка при загрузке операций:', error);
@@ -119,9 +143,7 @@ const MainPage = ({ defaultMenuOpen = false }: MainPageProps) => {
   }, [loadTransactions]);
 
   return (
-    <div className="app-shell">
-      <Header userName="Олег Зуев" defaultMenuOpen={defaultMenuOpen} />
-
+    <>
       <main className="dashboard-grid">
         <div className="left-stack">
           <PeriodSelector onDataLoaded={handleDataUpdate} />
@@ -132,8 +154,10 @@ const MainPage = ({ defaultMenuOpen = false }: MainPageProps) => {
             expenses={formatCurrency(stats.expenses)}
           />
 
-          <OperationForm onCreated={loadTransactions} />
+          {/* ИСПРАВЛЕНИЕ: Передаем функцию обновления сюда */}
+          <BankStatementUploadRow onUploadSuccess={loadTransactions} />
 
+          <OperationForm onCreated={loadTransactions} />
           <OperationsList transactions={transactions} />
         </div>
 
@@ -154,9 +178,10 @@ const MainPage = ({ defaultMenuOpen = false }: MainPageProps) => {
       </main>
 
       <footer className="footer">© 2026 Баланс+</footer>
-    </div>
+    </>
   );
 };
+
 
 const publicRoutes: AppRoute[] = [
   {
@@ -176,87 +201,156 @@ const publicRoutes: AppRoute[] = [
 const mainRoutes: AppRoute[] = [
   {
     path: '/main',
-    element: 
-    <ProtectedRoute>
-    <MainPage />,
-    </ProtectedRoute>
+    element: (
+      <PageWithHeader>
+        <MainPage />
+      </PageWithHeader>
+    ),
   },
   {
     path: '/main/analytics',
-    element: <AnalyticsPage />,
+    element: (
+      <PageWithHeader>
+        <AnalyticsPage />
+      </PageWithHeader>
+    ),
   },
   {
     path: '/analytics',
-    element: <AnalyticsPage />,
+    element: (
+      <PageWithHeader>
+        <AnalyticsPage />
+      </PageWithHeader>
+    ),
   },
   {
     path: '/main-menu',
-    element: <MainPage defaultMenuOpen />,
+    element: (
+      <PageWithHeader defaultMenuOpen>
+        <MainPage defaultMenuOpen />
+      </PageWithHeader>
+    ),
   },
   {
     path: '/menu',
-    element: <MainPage defaultMenuOpen />,
+    element: (
+      <PageWithHeader defaultMenuOpen>
+        <MainPage defaultMenuOpen />
+      </PageWithHeader>
+    ),
   },
 ];
 
 const adminRoutes: AppRoute[] = [
   {
     path: '/admin/upload',
-    element: <AdminUploadPage />,
+    element: (
+      <PageWithHeader>
+        <AdminUploadPage />
+      </PageWithHeader>
+    ),
   },
 ];
 
 const familyRoutes: AppRoute[] = [
   {
     path: '/family',
-    element: <FamilyMenuPage />,
+    element: (
+      <PageWithHeader>
+        <FamilyMenuPage />
+      </PageWithHeader>
+    ),
   },
   {
     path: '/family/main',
-    element: <FamilyMenuPage />,
+    element: (
+      <PageWithHeader>
+        <FamilyMenuPage />
+      </PageWithHeader>
+    ),
   },
   {
     path: '/family/prompt',
-    element: <FamilyPromptPage />,
+    element: (
+      <PageWithHeader>
+        <FamilyPromptPage />
+      </PageWithHeader>
+    ),
   },
   {
     path: '/family/create',
-    element: <FamilyCreateModalPage />,
+    element: (
+      <PageWithHeader>
+        <FamilyCreateModalPage />
+      </PageWithHeader>
+    ),
   },
   {
     path: '/family/settings',
-    element: <FamilySettingsPage />,
+    element: (
+      <PageWithHeader>
+        <FamilySettingsPage />
+      </PageWithHeader>
+    ),
   },
 ];
 
 const accountRoutes: AppRoute[] = [
   {
     path: '/account/invitations',
-    element: <InvitationsPage />,
+    element: (
+      <PageWithHeader>
+        <InvitationsPage />
+      </PageWithHeader>
+    ),
   },
   {
     path: '/account/profile-settings',
-    element: <ProfileSettingsPage />,
+    element: (
+      <PageWithHeader>
+        <ProfileSettingsPage />
+      </PageWithHeader>
+    ),
   },
   {
     path: '/invitations',
-    element: <InvitationsPage />,
+    element: (
+      <PageWithHeader>
+        <InvitationsPage />
+      </PageWithHeader>
+    ),
   },
   {
     path: '/profile/settings',
-    element: <ProfileSettingsPage />,
+    element: (
+      <PageWithHeader>
+        <ProfileSettingsPage />
+      </PageWithHeader>
+    ),
   },
   {
     path: '/account',
-    element: <ProfileSettingsPage />,
+    element: (
+      <PageWithHeader>
+        <ProfileSettingsPage />
+      </PageWithHeader>
+    ),
   },
   {
     path: '/profile-settings',
-    element: <ProfileSettingsPage />,
+    element: (
+      <PageWithHeader>
+        <ProfileSettingsPage />
+      </PageWithHeader>
+    ),
   },
   {
     path: '/account2',
-    element: <ProfileSettingsPage />,
+    element: (
+      <PageWithHeader>
+        <ProfileSettingsPage />
+      </PageWithHeader>
+    ),
   },
 ];
 

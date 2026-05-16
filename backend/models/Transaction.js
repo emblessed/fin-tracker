@@ -15,6 +15,14 @@ const transactionSchema = new Schema({
   commentary: String,
   page: Number,
   transactionNum: Number,
+
+
+  userId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User', 
+    required: true
+  }
+
 }, { timestamps: true });
 
 module.exports = mongoose.models.Transaction || mongoose.model('Transaction', transactionSchema);
