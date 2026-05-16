@@ -40,7 +40,10 @@ const familySchema = new Schema(
       default: [],
     },
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+    collection: 'families',
+  }
 );
 
 familySchema.index({ 'members.user': 1 });

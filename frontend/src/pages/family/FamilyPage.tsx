@@ -26,8 +26,20 @@ type FamilyMemberView = {
   expenses: number;
 };
 
+type Transaction = {
+  _id?: string;
+  id?: string;
+  amount: number;
+  date?: string;
+  createdAt?: string;
+  category?: string;
+  categoryInfo?: string;
+  bank?: string;
+  commentary?: string;
+};
+
 type FamilyOperation = {
-  id: number;
+  id: string;
   title: string;
   member: string;
   category: string;
@@ -41,60 +53,55 @@ type BudgetItem = {
   limit: number;
 };
 
-const fallbackOperations: FamilyOperation[] = [
-  {
-    id: 1,
-    title: 'Зарплата',
-    member: 'Владелец семьи',
-    category: 'Доходы',
-    date: '15.05.2026',
-    amount: 115670,
-  },
-  {
-    id: 2,
-    title: 'Продукты',
-    member: 'Семейный бюджет',
-    category: 'Супермаркеты',
-    date: '14.05.2026',
-    amount: -8230,
-  },
-  {
-    id: 3,
-    title: 'Перевод на общий счёт',
-    member: 'Владелец семьи',
-    category: 'Переводы',
-    date: '13.05.2026',
-    amount: -15000,
-  },
-  {
-    id: 4,
-    title: 'Оплата квартиры',
-    member: 'Семейный бюджет',
-    category: 'Дом',
-    date: '12.05.2026',
-    amount: -42000,
-  },
-];
+type TransactionsResponse = {
+  data?: Transaction[];
+  totalPages?: number;
+};
 
-const budgets: BudgetItem[] = [
-  {
-    title: 'Продукты',
-    spent: 32800,
-    limit: 50000,
-  },
-  {
-    title: 'Транспорт',
-    spent: 9200,
-    limit: 15000,
-  },
-  {
-    title: 'Развлечения',
-    spent: 18600,
-    limit: 25000,
-  },
-];
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
+const budgets: BudgetItem[] = [];
 const periodOptions = ['Все время', 'Сегодня', 'Эта неделя', 'Этот месяц', 'Свой период'];
+
+const CATEGORY_LABELS: Record<string, string> = {
+  salary: 'Зарплата',
+  income: 'Доходы',
+  transfer: 'Переводы',
+  transfers: 'Переводы',
+  withdrawal: 'Снятие наличных',
+  refund: 'Возврат',
+  products: 'Продукты',
+  product: 'Продукты',
+  food: 'Еда',
+  supermarket: 'Супермаркеты',
+  transport: 'Транспорт',
+  restaurant: 'Рестораны',
+  restaurants: 'Рестораны',
+  services: 'Услуги',
+  cash: 'Наличные',
+  qr: 'QR',
+  other: 'Другое',
+  others: 'Другое',
+};
+
+const normalizeCategory = (value?: string) => {
+  const normalized = String(value || '').trim().toLowerCase();
+
+  if (!normalized) return 'Другое';
+  if (CATEGORY_LABELS[normalized]) return CATEGORY_LABELS[normalized];
+  if (normalized.includes('зарп') || normalized.includes('salary')) return 'Зарплата';
+  if (normalized.includes('перев') || normalized.includes('transfer')) return 'Переводы';
+  if (normalized.includes('withdrawal') || normalized.includes('withdraw') || normalized.includes('сняти')) return 'Снятие наличных';
+  if (normalized.includes('refund') || normalized.includes('возврат')) return 'Возврат';
+  if (normalized === 'qr' || normalized.includes('qr') || normalized.includes('сбп')) return 'QR';
+  if (normalized.includes('продукт') || normalized.includes('product')) return 'Продукты';
+  if (normalized.includes('транспорт') || normalized.includes('transport')) return 'Транспорт';
+  if (normalized.includes('ресторан') || normalized.includes('restaurant')) return 'Рестораны';
+  if (normalized.includes('услуг') || normalized.includes('service')) return 'Услуги';
+  if (normalized.includes('cash') || normalized.includes('налич')) return 'Наличные';
+
+  return value ? value[0].toUpperCase() + value.slice(1) : 'Другое';
+};
 
 const formatMoney = (value: number) =>
   new Intl.NumberFormat('ru-RU', {
@@ -102,6 +109,16 @@ const formatMoney = (value: number) =>
     currency: 'RUB',
     maximumFractionDigits: 0,
   }).format(value);
+
+const formatDate = (value?: string) => {
+  if (!value) return 'Дата не указана';
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) return 'Дата не указана';
+
+  return new Intl.DateTimeFormat('ru-RU').format(date);
+};
 
 const getMemberName = (member: ApiFamilyMember) =>
   member.fullname?.trim() || member.login?.trim() || member.email?.trim() || 'Участник семьи';
@@ -119,17 +136,86 @@ const getInitials = (name: string) => {
 const memberRoleText = (role: ApiFamilyMember['role']) =>
   role === 'owner' ? 'Владелец' : 'Участник';
 
+const getTransactionTitle = (transaction: Transaction) => {
+  const commentary = transaction.commentary?.trim();
+
+  if (commentary && commentary !== 'Комментарий не найден') {
+    return commentary;
+  }
+
+  return normalizeCategory(transaction.categoryInfo || transaction.category);
+};
+
+const getTransactionCategory = (transaction: Transaction) => {
+  return normalizeCategory(transaction.categoryInfo || transaction.category);
+};
+
 export function FamilyPage({ variant = 'menu' }: FamilyPageProps) {
   const navigate = useNavigate();
 
   const [selectedPeriod, setSelectedPeriod] = useState('Все время');
   const [family, setFamily] = useState<Family | null>(null);
+  const [familyTransactions, setFamilyTransactions] = useState<Transaction[]>([]);
   const [familyName, setFamilyName] = useState('');
   const [inviteEmail, setInviteEmail] = useState('');
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [isTransactionsLoading, setIsTransactionsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+
+  const loadFamilyTransactions = useCallback(async (activeFamily: Family | null) => {
+    if (!activeFamily) {
+      setFamilyTransactions([]);
+      return;
+    }
+
+    const token = localStorage.getItem('token');
+
+    if (!token) {
+      setFamilyTransactions([]);
+      return;
+    }
+
+    setIsTransactionsLoading(true);
+
+    try {
+      const allTransactions: Transaction[] = [];
+      let page = 1;
+      let totalPages = 1;
+
+      do {
+        const url = new URL('/api/family/transactions', API_URL);
+        url.searchParams.set('page', String(page));
+        url.searchParams.set('limit', '200');
+        url.searchParams.set('sortBy', 'date');
+        url.searchParams.set('order', 'desc');
+
+        const response = await fetch(url.toString(), {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error('Не удалось загрузить семейные операции');
+        }
+
+        const result: TransactionsResponse = await response.json();
+        allTransactions.push(...(Array.isArray(result.data) ? result.data : []));
+        totalPages = Math.max(1, Number(result.totalPages) || 1);
+        page += 1;
+      } while (page <= totalPages);
+
+      setFamilyTransactions(allTransactions);
+    } catch (loadError: any) {
+      console.error('Ошибка загрузки семейных операций:', loadError);
+      setError(loadError.message || 'Не удалось загрузить семейные операции');
+      setFamilyTransactions([]);
+    } finally {
+      setIsTransactionsLoading(false);
+    }
+  }, []);
 
   const loadFamily = useCallback(async () => {
     setIsLoading(true);
@@ -139,16 +225,49 @@ export function FamilyPage({ variant = 'menu' }: FamilyPageProps) {
       const status = await getFamilyStatus();
       setFamily(status.family);
       setFamilyName(status.family?.name || '');
+      await loadFamilyTransactions(status.family);
     } catch (loadError: any) {
       setError(loadError.message || 'Не удалось загрузить семейный доступ');
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [loadFamilyTransactions]);
 
   useEffect(() => {
     loadFamily();
   }, [loadFamily]);
+
+  useEffect(() => {
+    const handleTransactionsChanged = () => {
+      loadFamilyTransactions(family);
+    };
+
+    window.addEventListener('transactions:changed', handleTransactionsChanged);
+    window.addEventListener('family-transactions:changed', handleTransactionsChanged);
+
+    return () => {
+      window.removeEventListener('transactions:changed', handleTransactionsChanged);
+      window.removeEventListener('family-transactions:changed', handleTransactionsChanged);
+    };
+  }, [family, loadFamilyTransactions]);
+
+  const transactionTotals = useMemo(() => {
+    const income = familyTransactions.reduce((sum, transaction) => {
+      const amount = Number(transaction.amount);
+      return amount > 0 ? sum + amount : sum;
+    }, 0);
+
+    const expenses = familyTransactions.reduce((sum, transaction) => {
+      const amount = Number(transaction.amount);
+      return amount < 0 ? sum + Math.abs(amount) : sum;
+    }, 0);
+
+    return {
+      income,
+      expenses,
+      balance: income - expenses,
+    };
+  }, [familyTransactions]);
 
   const visibleMembers = useMemo<FamilyMemberView[]>(() => {
     if (!family?.members?.length) {
@@ -157,43 +276,40 @@ export function FamilyPage({ variant = 'menu' }: FamilyPageProps) {
 
     return family.members.map((member, index) => {
       const name = getMemberName(member);
-      const isOwner = member.role === 'owner';
-      const balance = isOwner ? 76000 : 42000 + index * 7000;
-      const income = isOwner ? 125000 : 73000 + index * 5000;
-      const expenses = isOwner ? 49000 : 31000 + index * 3000;
+      const isFirstMember = index === 0;
 
       return {
         id: member.id || String(index),
         name,
         role: memberRoleText(member.role),
         initials: getInitials(name),
-        balance,
-        income,
-        expenses,
+        balance: isFirstMember ? transactionTotals.balance : 0,
+        income: isFirstMember ? transactionTotals.income : 0,
+        expenses: isFirstMember ? transactionTotals.expenses : 0,
       };
     });
-  }, [family]);
+  }, [family, transactionTotals]);
 
-  const visibleOperations = useMemo(() => {
+  const visibleOperations = useMemo<FamilyOperation[]>(() => {
     const ownerName = visibleMembers.find((member) => member.role === 'Владелец')?.name || 'Владелец семьи';
 
-    return fallbackOperations.map((operation) =>
-      operation.member === 'Владелец семьи'
-        ? {
-            ...operation,
-            member: ownerName,
-          }
-        : operation,
-    );
-  }, [visibleMembers]);
+    return familyTransactions.slice(0, 8).map((transaction, index) => ({
+      id: transaction._id || transaction.id || `${transaction.date || 'operation'}-${index}`,
+      title: getTransactionTitle(transaction),
+      member: ownerName,
+      category: getTransactionCategory(transaction),
+      date: formatDate(transaction.date),
+      amount: Number(transaction.amount) || 0,
+    }));
+  }, [familyTransactions, visibleMembers]);
 
   const totals = useMemo(
     () => ({
-      balance: visibleMembers.reduce((sum, member) => sum + member.balance, 0),
-      income: visibleMembers.reduce((sum, member) => sum + member.income, 0),
-      expenses: visibleMembers.reduce((sum, member) => sum + member.expenses, 0),
+      balance: transactionTotals.balance,
+      income: transactionTotals.income,
+      expenses: transactionTotals.expenses,
     }),
-    [visibleMembers],
+    [transactionTotals],
   );
 
   const closeLink = family ? '/family' : '/family/create';
@@ -201,6 +317,12 @@ export function FamilyPage({ variant = 'menu' }: FamilyPageProps) {
   const notifyFamilyChanged = () => {
     window.dispatchEvent(new Event('family:changed'));
     window.dispatchEvent(new Event('invitations:changed'));
+  };
+
+  const handleFamilyUploadSuccess = async () => {
+    setNotice('PDF-выписка обработана');
+    setError('');
+    await loadFamilyTransactions(family);
   };
 
   const handleCreateFamily = async (event: FormEvent) => {
@@ -213,6 +335,7 @@ export function FamilyPage({ variant = 'menu' }: FamilyPageProps) {
       const result = await createFamily(familyName || '');
       setFamily(result.family);
       setFamilyName(result.family.name);
+      setFamilyTransactions([]);
       setNotice('Семья создана');
       notifyFamilyChanged();
       navigate('/family', { replace: true });
@@ -315,153 +438,164 @@ export function FamilyPage({ variant = 'menu' }: FamilyPageProps) {
 
   return (
     <>
-      {family ? (
-        <>
+      <section className="panel periods-card">
+        <h1
+          className="section-title"
+          style={{
+            color: '#0f5f94',
+            fontSize: 34,
+            lineHeight: 1.2,
+            margin: 0,
+          }}
+        >
+          {family.name}
+        </h1>
+
+        <BankStatementUploadRow
+          style={{ marginTop: 18 }}
+          scope="family"
+          onUploadSuccess={handleFamilyUploadSuccess}
+        />
+
+        {notice && <p className="profile-success">{notice}</p>}
+        {error && <p className="profile-error">{error}</p>}
+      </section>
+
+      <section className="stats-row" style={{ marginTop: 16 }}>
+        <article className="panel stat-card">
+          <div className="stat-label">Общий баланс</div>
+          <div className="stat-value">{formatMoney(totals.balance)}</div>
+        </article>
+
+        <article className="panel stat-card">
+          <div className="stat-label">Доходы семьи</div>
+          <div className="stat-value green">{formatMoney(totals.income)}</div>
+        </article>
+
+        <article className="panel stat-card">
+          <div className="stat-label">Расходы семьи</div>
+          <div className="stat-value red">{formatMoney(totals.expenses)}</div>
+        </article>
+      </section>
+
+      <main className="dashboard-grid" style={{ marginTop: 16 }}>
+        <div className="left-stack">
           <section className="panel periods-card">
-            <h1
-              className="section-title"
-              style={{
-                color: '#0f5f94',
-                fontSize: 34,
-                lineHeight: 1.2,
-                margin: 0,
-              }}
-            >
-              {family.name}
-            </h1>
+            <h2 className="section-title period-title">Периоды</h2>
 
-            <BankStatementUploadRow style={{ marginTop: 18 }} />
-          </section>
-
-          <section className="stats-row" style={{ marginTop: 16 }}>
-            <article className="panel stat-card">
-              <div className="stat-label">Общий баланс</div>
-              <div className="stat-value">{formatMoney(totals.balance)}</div>
-            </article>
-
-            <article className="panel stat-card">
-              <div className="stat-label">Доходы семьи</div>
-              <div className="stat-value green">{formatMoney(totals.income)}</div>
-            </article>
-
-            <article className="panel stat-card">
-              <div className="stat-label">Расходы семьи</div>
-              <div className="stat-value red">{formatMoney(totals.expenses)}</div>
-            </article>
-          </section>
-
-          <main className="dashboard-grid" style={{ marginTop: 16 }}>
-            <div className="left-stack">
-              <section className="panel periods-card">
-                <h2 className="section-title period-title">Периоды</h2>
-
-                <div className="chips-row">
-                  {periodOptions.map((period) => (
-                    <button
-                      className={`period-chip ${selectedPeriod === period ? 'active' : ''}`}
-                      key={period}
-                      type="button"
-                      onClick={() => setSelectedPeriod(period)}
-                    >
-                      {period}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="dates-row" style={{ marginTop: 16 }}>
-                  <span className="date-field">С</span>
-                  <span className="date-dash">—</span>
-                  <span className="date-field">По</span>
-                  <button className="action-light" type="button">
-                    Применить
-                  </button>
-                </div>
-              </section>
-
-              <section className="panel periods-card">
-                <div className="chips-row" style={{ justifyContent: 'space-between' }}>
-                  <h2 className="section-title period-title">Участники</h2>
-
-                  <Link className="mini-light-button" to="/family/prompt">
-                    <span className="plus">＋</span>
-                    Пригласить
-                  </Link>
-                </div>
-
-                <div className="member-list">
-                  {visibleMembers.map((member) => (
-                    <article className={`member-card ${member.role === 'Владелец' ? 'owner' : ''}`} key={member.id}>
-                      <div>
-                        <div className="member-name">{member.name}</div>
-                        <div className="member-mail">{member.role}</div>
-                      </div>
-
-                      <strong className="stat-value" style={{ fontSize: 20 }}>
-                        {formatMoney(member.balance)}
-                      </strong>
-                    </article>
-                  ))}
-                </div>
-              </section>
+            <div className="chips-row">
+              {periodOptions.map((period) => (
+                <button
+                  className={`period-chip ${selectedPeriod === period ? 'active' : ''}`}
+                  key={period}
+                  type="button"
+                  onClick={() => setSelectedPeriod(period)}
+                >
+                  {period}
+                </button>
+              ))}
             </div>
 
-            <aside className="right-stack">
-              <section className="panel periods-card">
-                <div className="chips-row" style={{ justifyContent: 'space-between' }}>
-                  <h2 className="section-title period-title">Лимиты по категориям</h2>
-                  <span className="small-badge">Май</span>
-                </div>
+            <div className="dates-row" style={{ marginTop: 16 }}>
+              <span className="date-field">С</span>
+              <span className="date-dash">—</span>
+              <span className="date-field">По</span>
+              <button className="action-light" type="button">
+                Применить
+              </button>
+            </div>
+          </section>
 
-                <div className="member-list">
-                  {budgets.map((budget) => {
-                    const percent = Math.min(Math.round((budget.spent / budget.limit) * 100), 100);
+          <section className="panel periods-card">
+            <div className="chips-row" style={{ justifyContent: 'space-between' }}>
+              <h2 className="section-title period-title">Участники</h2>
 
-                    return (
-                      <div className="invite-card" key={budget.title}>
-                        <div className="chips-row" style={{ justifyContent: 'space-between' }}>
-                          <strong>{budget.title}</strong>
-                          <span>{percent}%</span>
-                        </div>
+              <Link className="mini-light-button" to="/family/prompt">
+                <span className="plus">＋</span>
+                Пригласить
+              </Link>
+            </div>
 
-                        <p className="member-mail">
-                          {formatMoney(budget.spent)} из {formatMoney(budget.limit)}
-                        </p>
+            <div className="member-list">
+              {visibleMembers.map((member) => (
+                <article className={`member-card ${member.role === 'Владелец' ? 'owner' : ''}`} key={member.id}>
+                  <div>
+                    <div className="member-name">{member.name}</div>
+                    <div className="member-mail">{member.role}</div>
+                  </div>
+
+                  <strong className="stat-value" style={{ fontSize: 20 }}>
+                    {formatMoney(member.balance)}
+                  </strong>
+                </article>
+              ))}
+            </div>
+          </section>
+        </div>
+
+        <aside className="right-stack">
+          <section className="panel periods-card">
+            <div className="chips-row" style={{ justifyContent: 'space-between' }}>
+              <h2 className="section-title period-title">Лимиты по категориям</h2>
+              <span className="small-badge">Май</span>
+            </div>
+
+            <div className="member-list">
+              {budgets.length ? (
+                budgets.map((budget) => {
+                  const percent = Math.min(Math.round((budget.spent / budget.limit) * 100), 100);
+
+                  return (
+                    <div className="invite-card" key={budget.title}>
+                      <div className="chips-row" style={{ justifyContent: 'space-between' }}>
+                        <strong>{budget.title}</strong>
+                        <span>{percent}%</span>
                       </div>
-                    );
-                  })}
-                </div>
-              </section>
 
-              <section className="panel periods-card">
-                <div className="chips-row" style={{ justifyContent: 'space-between' }}>
-                  <h2 className="section-title period-title">Последние операции</h2>
-                  <span className="small-badge">{visibleOperations.length}</span>
-                </div>
+                      <p className="member-mail">
+                        {formatMoney(budget.spent)} из {formatMoney(budget.limit)}
+                      </p>
+                    </div>
+                  );
+                })
+              ) : (
+                <p className="member-mail">Лимиты появятся после настройки семейного бюджета.</p>
+              )}
+            </div>
+          </section>
 
-                <div className="member-list">
-                  {visibleOperations.map((operation) => (
-                    <article className="member-card" key={operation.id}>
-                      <div>
-                        <div className="member-name">{operation.title}</div>
-                        <div className="member-mail">
-                          {operation.member} · {operation.category}
-                        </div>
-                        <div className="member-mail">{operation.date}</div>
+          <section className="panel periods-card">
+            <div className="chips-row" style={{ justifyContent: 'space-between' }}>
+              <h2 className="section-title period-title">Последние операции</h2>
+              <span className="small-badge">{visibleOperations.length}</span>
+            </div>
+
+            <div className="member-list">
+              {isTransactionsLoading ? (
+                <p className="member-mail">Загрузка операций...</p>
+              ) : visibleOperations.length ? (
+                visibleOperations.map((operation) => (
+                  <article className="member-card" key={operation.id}>
+                    <div>
+                      <div className="member-name">{operation.title}</div>
+                      <div className="member-mail">
+                        {operation.member} · {operation.category}
                       </div>
+                      <div className="member-mail">{operation.date}</div>
+                    </div>
 
-                      <strong className={`stat-value ${operation.amount > 0 ? 'green' : 'red'}`} style={{ fontSize: 20 }}>
-                        {formatMoney(operation.amount)}
-                      </strong>
-                    </article>
-                  ))}
-                </div>
-              </section>
-            </aside>
-          </main>
-        </>
-      ) : (
-        renderCreateFamilyPanel()
-      )}
+                    <strong className={`stat-value ${operation.amount > 0 ? 'green' : 'red'}`} style={{ fontSize: 20 }}>
+                      {formatMoney(operation.amount)}
+                    </strong>
+                  </article>
+                ))
+              ) : (
+                <p className="member-mail">Операций пока нет. Они появятся после загрузки PDF-выписки на странице семьи.</p>
+              )}
+            </div>
+          </section>
+        </aside>
+      </main>
 
       {variant === 'prompt' && family && (
         <div className="overlay">

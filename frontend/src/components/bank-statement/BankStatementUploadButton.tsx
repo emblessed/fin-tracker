@@ -1,9 +1,16 @@
-import { useId, useState } from 'react';
+import { useId, useState, type ChangeEvent, type KeyboardEvent } from 'react';
+
+type UploadResult = {
+  count?: number;
+  message?: string;
+  [key: string]: unknown;
+};
 
 type BankStatementUploadButtonProps = {
   label?: string;
   inputId?: string;
-  onSuccess?: () => void; // Добавляем колбэк для обновления данных
+  scope?: 'personal' | 'family';
+  onSuccess?: (result: UploadResult) => void | Promise<void>;
 };
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
@@ -11,53 +18,79 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 export function BankStatementUploadButton({
   label = 'Загрузить PDF-выписку',
   inputId,
+  scope = 'personal',
   onSuccess,
 }: BankStatementUploadButtonProps) {
   const generatedId = useId();
   const resolvedInputId = inputId || `bank-statement-upload-${generatedId.replace(/:/g, '')}`;
-  
   const [isUploading, setIsUploading] = useState(false);
 
-  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
+
     if (!files || files.length === 0) return;
 
     const file = files[0];
-    const formData = new FormData();
-    formData.append('file', file); // Ключ 'file' должен совпадать с upload.single('file') на бэкенде
 
-    setIsUploading(false);
+    if (file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
+      alert('Можно загрузить только PDF-файл');
+      event.target.value = '';
+      return;
+    }
+
+    const token = localStorage.getItem('token');
+
+    if (!token) {
+      alert('Сначала войдите в аккаунт');
+      event.target.value = '';
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const endpoint =
+      scope === 'family'
+        ? '/api/family/transactions/upload-pdf'
+        : '/api/transactions/upload-pdf';
+
     setIsUploading(true);
 
     try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`${API_URL}/api/transactions/upload-pdf`, {
+      const response = await fetch(`${API_URL}${endpoint}`, {
         method: 'POST',
         headers: {
-          // Важно: Content-Type для FormData браузер выставит сам, не пиши его вручную
-          'Authorization': `Bearer ${token}`
+          Authorization: `Bearer ${token}`,
         },
         body: formData,
       });
 
+      const result = await response.json().catch(() => ({}));
+
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Ошибка обработки файла');
+        throw new Error(result.message || 'Ошибка обработки файла');
       }
 
-      const result = await response.json();
-      console.log(`Успешно обработано транзакций: ${result.count}`);
-      
-      // Если передали колбэк, обновляем данные на главной
-      if (onSuccess) {
-        onSuccess();
+      window.dispatchEvent(new Event('transactions:changed'));
+
+      if (scope === 'family') {
+        window.dispatchEvent(new Event('family-transactions:changed'));
       }
+
+      await onSuccess?.(result);
     } catch (error: any) {
       console.error('Ошибка при отправке выписки:', error);
-      alert(`Не удалось обработать выписку: ${error.message}`);
+      alert(`Не удалось обработать выписку: ${error.message || 'неизвестная ошибка'}`);
     } finally {
       setIsUploading(false);
-      event.target.value = ''; // Сбрасываем инпут, чтобы можно было загрузить тот же файл повторно
+      event.target.value = '';
+    }
+  };
+
+  const handleLabelKeyDown = (event: KeyboardEvent<HTMLLabelElement>) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      document.getElementById(resolvedInputId)?.click();
     }
   };
 
@@ -73,11 +106,12 @@ export function BankStatementUploadButton({
         disabled={isUploading}
       />
 
-      <label 
-        className={`mini-light-button ${isUploading ? 'loading' : ''}`} 
-        htmlFor={resolvedInputId} 
-        role="button" 
+      <label
+        className={`mini-light-button ${isUploading ? 'loading' : ''}`}
+        htmlFor={isUploading ? undefined : resolvedInputId}
+        role="button"
         tabIndex={0}
+        onKeyDown={handleLabelKeyDown}
         style={{ opacity: isUploading ? 0.6 : 1, cursor: isUploading ? 'not-allowed' : 'pointer' }}
       >
         <span className="plus">{isUploading ? '⏳' : '＋'}</span>

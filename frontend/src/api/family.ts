@@ -107,3 +107,34 @@ export const declineFamilyInvitation = (invitationId: string) => {
     },
   );
 };
+
+export type FamilyTransaction = {
+  _id?: string;
+  id?: string;
+  familyId?: string;
+  userId?: string;
+  amount: number;
+  date?: string;
+  createdAt?: string;
+  category?: string;
+  categoryInfo?: string;
+  bank?: string;
+  commentary?: string;
+  balance?: number;
+  page?: number;
+  transactionNum?: number;
+};
+
+export type FamilyTransactionsResponse = {
+  data: FamilyTransaction[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+};
+
+export const getFamilyTransactions = (page = 1, limit = 200) => {
+  return familyRequest<FamilyTransactionsResponse>(
+    `/api/family/transactions?page=${page}&limit=${limit}&sortBy=date&order=desc`,
+  );
+};

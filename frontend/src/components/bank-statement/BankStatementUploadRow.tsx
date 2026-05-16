@@ -1,18 +1,27 @@
 import type { CSSProperties } from 'react';
+
 import { BankStatementUploadButton } from './BankStatementUploadButton';
+
+type UploadResult = {
+  count?: number;
+  message?: string;
+  [key: string]: unknown;
+};
 
 type BankStatementUploadRowProps = {
   align?: 'left' | 'right';
   style?: CSSProperties;
   label?: string;
-  onUploadSuccess?: () => void;
+  scope?: 'personal' | 'family';
+  onUploadSuccess?: (result: UploadResult) => void | Promise<void>;
 };
 
 export function BankStatementUploadRow({
   align = 'left',
   style,
   label,
-  onUploadSuccess, // Деструктуризируем его здесь
+  scope = 'personal',
+  onUploadSuccess,
 }: BankStatementUploadRowProps) {
   return (
     <div
@@ -22,7 +31,7 @@ export function BankStatementUploadRow({
         ...style,
       }}
     >
-      <BankStatementUploadButton label={label} onSuccess={onUploadSuccess} />
+      <BankStatementUploadButton label={label} scope={scope} onSuccess={onUploadSuccess} />
     </div>
   );
 }

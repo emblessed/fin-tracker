@@ -2,19 +2,24 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 
 import './App.css';
+
 import Register from './register/register.tsx';
 import SignedUp from './login/login.tsx';
+
 import Header from './components/Header.tsx';
 import OperationForm from './components/OperationForm.tsx';
 import OperationsList from './components/OperationList.tsx';
 import CategoryChart from './components/CategoryChart.tsx';
+import CashFlowChart from './components/CashFlowChart.tsx';
 import PeriodSelector from './components/PeriodSelector.tsx';
 import StatsCards from './components/StatsCards.tsx';
 import { BankStatementUploadRow } from './components/bank-statement';
+
 import AnalyticsPage from './pages/analytics/AnalyticsPage.tsx';
 import AdminUploadPage from './pages/admin/AdminUploadPage.tsx';
 import { FamilyPage } from './pages/family/FamilyPage.tsx';
 import ProfileSettingsPage from './pages/account/pages/ProfileSettingsPage.tsx';
+
 import ProtectedRoute from './api/ProtectedRoute.tsx';
 
 type AppRoute = {
@@ -63,12 +68,10 @@ const formatCurrency = (value: number) =>
 
 const PageWithHeader = ({ children, defaultMenuOpen = false }: PageWithHeaderProps) => {
   return (
-    <ProtectedRoute>
-      <div className="app-shell">
-        <Header defaultMenuOpen={defaultMenuOpen} />
-        {children}
-      </div>
-    </ProtectedRoute>
+    <div className="app-shell">
+      <Header defaultMenuOpen={defaultMenuOpen} />
+      {children}
+    </div>
   );
 };
 
@@ -93,12 +96,11 @@ const MainPage = ({ defaultMenuOpen: _defaultMenuOpen = false }: MainPageProps) 
   const loadTransactions = useCallback(async () => {
     try {
       const url = new URL('/api/transactions', API_URL);
-      url.searchParams.set('limit', '50');
+      url.searchParams.set('limit', '500');
       url.searchParams.set('sortBy', 'date');
       url.searchParams.set('order', 'desc');
 
       const token = localStorage.getItem('token');
-
       const response = await fetch(url.toString(), {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -145,24 +147,25 @@ const MainPage = ({ defaultMenuOpen: _defaultMenuOpen = false }: MainPageProps) 
           />
 
           <BankStatementUploadRow onUploadSuccess={loadTransactions} />
-
           <OperationForm onCreated={loadTransactions} />
-          <OperationsList transactions={transactions} />
+          <OperationsList transactions={transactions} onChanged={loadTransactions} />
         </div>
 
         <aside className="right-stack">
           <CategoryChart
             title="Расходы по категориям"
             total={formatCurrency(stats.expenses)}
-            data={[]}
+            transactions={transactions}
           />
 
           <CategoryChart
             title="Доходы по категориям"
             total={formatCurrency(stats.income)}
-            data={[]}
+            transactions={transactions}
             isIncome
           />
+
+          <CashFlowChart transactions={transactions} />
         </aside>
       </main>
 
@@ -170,6 +173,12 @@ const MainPage = ({ defaultMenuOpen: _defaultMenuOpen = false }: MainPageProps) 
     </>
   );
 };
+
+const withProtectedHeader = (element: ReactNode, defaultMenuOpen = false) => (
+  <ProtectedRoute>
+    <PageWithHeader defaultMenuOpen={defaultMenuOpen}>{element}</PageWithHeader>
+  </ProtectedRoute>
+);
 
 const publicRoutes: AppRoute[] = [
   {
@@ -189,140 +198,76 @@ const publicRoutes: AppRoute[] = [
 const mainRoutes: AppRoute[] = [
   {
     path: '/main',
-    element: (
-      <PageWithHeader>
-        <MainPage />
-      </PageWithHeader>
-    ),
+    element: withProtectedHeader(<MainPage />),
   },
   {
     path: '/main/analytics',
-    element: (
-      <PageWithHeader>
-        <AnalyticsPage />
-      </PageWithHeader>
-    ),
+    element: withProtectedHeader(<AnalyticsPage />),
   },
   {
     path: '/analytics',
-    element: (
-      <PageWithHeader>
-        <AnalyticsPage />
-      </PageWithHeader>
-    ),
+    element: withProtectedHeader(<AnalyticsPage />),
   },
   {
     path: '/main-menu',
-    element: (
-      <PageWithHeader defaultMenuOpen>
-        <MainPage defaultMenuOpen />
-      </PageWithHeader>
-    ),
+    element: withProtectedHeader(<MainPage defaultMenuOpen />, true),
   },
   {
     path: '/menu',
-    element: (
-      <PageWithHeader defaultMenuOpen>
-        <MainPage defaultMenuOpen />
-      </PageWithHeader>
-    ),
+    element: withProtectedHeader(<MainPage defaultMenuOpen />, true),
   },
 ];
 
 const adminRoutes: AppRoute[] = [
   {
     path: '/admin/upload',
-    element: (
-      <PageWithHeader>
-        <AdminUploadPage />
-      </PageWithHeader>
-    ),
+    element: withProtectedHeader(<AdminUploadPage />),
   },
 ];
 
 const familyRoutes: AppRoute[] = [
   {
     path: '/family',
-    element: (
-      <PageWithHeader>
-        <FamilyPage variant="menu" />
-      </PageWithHeader>
-    ),
+    element: withProtectedHeader(<FamilyPage />),
   },
   {
     path: '/family/main',
-    element: (
-      <PageWithHeader>
-        <FamilyPage variant="menu" />
-      </PageWithHeader>
-    ),
+    element: withProtectedHeader(<FamilyPage />),
   },
   {
     path: '/family/prompt',
-    element: (
-      <PageWithHeader>
-        <FamilyPage variant="prompt" />
-      </PageWithHeader>
-    ),
+    element: withProtectedHeader(<FamilyPage />),
   },
   {
     path: '/family/create',
-    element: (
-      <PageWithHeader>
-        <FamilyPage variant="create" />
-      </PageWithHeader>
-    ),
+    element: withProtectedHeader(<FamilyPage />),
   },
   {
     path: '/family/settings',
-    element: (
-      <PageWithHeader>
-        <FamilyPage variant="settings" />
-      </PageWithHeader>
-    ),
+    element: withProtectedHeader(<FamilyPage />),
   },
 ];
 
 const accountRoutes: AppRoute[] = [
   {
     path: '/account/profile-settings',
-    element: (
-      <PageWithHeader>
-        <ProfileSettingsPage />
-      </PageWithHeader>
-    ),
+    element: withProtectedHeader(<ProfileSettingsPage />),
   },
   {
     path: '/profile/settings',
-    element: (
-      <PageWithHeader>
-        <ProfileSettingsPage />
-      </PageWithHeader>
-    ),
+    element: withProtectedHeader(<ProfileSettingsPage />),
   },
   {
     path: '/account',
-    element: (
-      <PageWithHeader>
-        <ProfileSettingsPage />
-      </PageWithHeader>
-    ),
+    element: withProtectedHeader(<ProfileSettingsPage />),
   },
   {
     path: '/profile-settings',
-    element: (
-      <PageWithHeader>
-        <ProfileSettingsPage />
-      </PageWithHeader>
-    ),
+    element: withProtectedHeader(<ProfileSettingsPage />),
   },
   {
     path: '/account2',
-    element: (
-      <PageWithHeader>
-        <ProfileSettingsPage />
-      </PageWithHeader>
-    ),
+    element: withProtectedHeader(<ProfileSettingsPage />),
   },
 ];
 
