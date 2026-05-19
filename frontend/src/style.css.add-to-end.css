@@ -1,0 +1,151 @@
+/* === AUTH LOGIN/REGISTER FIX START === */
+#root:has(.auth-page) {
+  width: 100%;
+  max-width: none;
+  min-height: 100svh;
+  margin: 0;
+  border-inline: 0;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+}
+
+body:has(.auth-page) {
+  min-height: 100svh;
+  display: block;
+  background-color: #f4f7fc;
+}
+
+.auth-page {
+  width: 100%;
+  min-height: 100svh;
+  padding: 32px 16px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #f4f7fc;
+}
+
+.auth-page .auth-form {
+  width: min(470px, 100%);
+  margin: 0 auto;
+  box-sizing: border-box;
+  box-shadow: 0 28px 70px rgba(4, 71, 114, 0.12);
+}
+
+.auth-page .auth-form form {
+  gap: 22px;
+}
+
+.auth-error {
+  color: #f36355;
+  margin-bottom: 10px;
+  font-size: 15px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.auth-password-field {
+  position: relative;
+}
+
+.auth-password-field .passwordPadding {
+  padding-right: 58px !important;
+}
+
+.auth-password-field .password-toggle {
+  position: absolute;
+  right: 17px;
+  top: 40px;
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  padding: 0;
+  margin: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: #044772;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: none;
+}
+
+.auth-password-field .password-toggle:hover {
+  background: rgba(4, 71, 114, 0.08);
+}
+
+.auth-password-field .password-toggle .eye-icon {
+  width: 23px;
+  height: 23px;
+}
+
+.auth-checkbox-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  align-self: flex-start;
+  font-size: 15px;
+  color: #1f2a44;
+}
+
+.auth-checkbox-row input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: #044772;
+}
+
+.auth-actions {
+  margin-top: 18px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 14px;
+}
+
+.auth-actions button[type='submit'],
+.auth-actions .auth-back-button {
+  margin-bottom: 0;
+}
+
+.auth-link-row {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.45;
+  color: #1f2a44;
+}
+
+.auth-blue-link {
+  color: #0b64b0;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.auth-blue-link:hover {
+  text-decoration: underline;
+}
+
+@media (max-height: 780px) {
+  .auth-page {
+    align-items: flex-start;
+  }
+}
+
+@media (max-width: 560px) {
+  .auth-page {
+    padding: 20px 12px;
+  }
+
+  .auth-page .auth-form {
+    padding: 32px 22px;
+  }
+
+  .auth-link-row {
+    font-size: 16px;
+  }
+}
+/* === AUTH LOGIN/REGISTER FIX END === */

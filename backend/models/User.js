@@ -9,18 +9,11 @@ const userSchema = new Schema(
     email: { type: String, trim: true, lowercase: true, required: true, unique: true },
     password: { type: String, required: true },
     gender: String,
-
     avatarUrl: { type: String, default: '' },
-
-    familyId: {
-      type: Schema.Types.ObjectId,
-      ref: 'Family',
-      default: null,
-    },
-
+    familyId: { type: Schema.Types.ObjectId, ref: 'Family', default: null },
     settings: {
-      currency: { type: String, default: 'RUB' },
-      language: { type: String, default: 'ru' },
+      currency: { type: String, enum: ['RUB', 'USD', 'EUR'], default: 'RUB' },
+      language: { type: String, enum: ['ru', 'en'], default: 'ru' },
       theme: { type: String, enum: ['light', 'dark'], default: 'light' },
       emailNotifications: { type: Boolean, default: true },
     },

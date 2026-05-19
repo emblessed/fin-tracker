@@ -105,7 +105,6 @@ export function BankStatementUploadButton({
         onChange={handleFileChange}
         disabled={isUploading}
       />
-
       <label
         className={`mini-light-button ${isUploading ? 'loading' : ''}`}
         htmlFor={isUploading ? undefined : resolvedInputId}

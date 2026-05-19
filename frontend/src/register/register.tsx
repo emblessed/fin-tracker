@@ -1,162 +1,182 @@
-import React from 'react';
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { registerUser } from '../api/auth';
+
+const saveAuthSession = (data: any) => {
+  const token = data?.token || data?.accessToken;
+
+  if (token) {
+    localStorage.setItem('token', token);
+  }
+
+  if (data?.user) {
+    localStorage.setItem('user', JSON.stringify(data.user));
+  }
+
+  return Boolean(token);
+};
 
 export default function Register() {
   const navigate = useNavigate();
 
-  // 1. Хранилище данных формы
   const [formData, setFormData] = useState({
     fullname: '',
     login: '',
     email: '',
     password: '',
-    gender: 'male'
+    gender: 'male',
   });
-
-  // 2. Хранилище для ошибок
   const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
-  // --- НОВОЕ: Состояние загрузки ---
-  const [isLoading, setIsLoading] = useState(false); 
-
-  // 3. Функция "Слежка за инпутами"
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
+
+    setFormData((prev) => ({
       ...prev,
-      [name]: value
+      [name]: value,
     }));
   };
 
-  // 4. Главная функция отправки
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setError('');
-    
-    // --- НОВОЕ: Включаем индикатор загрузки ---
-    setIsLoading(true); 
+    setIsLoading(true);
 
     try {
-      await registerUser(formData);
-      
-      alert("Регистрация прошла успешно!");
-      navigate('/login');
-      
+      const data = await registerUser(formData);
+      const hasToken = saveAuthSession(data);
+
+      window.dispatchEvent(new Event('profile:changed'));
+
+      alert('Регистрация прошла успешно!');
+      navigate(hasToken ? '/main' : '/login');
     } catch (err: any) {
-      setError(err.message);
+      setError(err.message || 'Ошибка регистрации');
     } finally {
-      setIsLoading(false); 
+      setIsLoading(false);
     }
   };
 
+  return (
+    <main className="auth-page">
+      <div className="form auth-form">
+        <h1>Регистрация</h1>
 
-    return (
-  <>
-    <div className="form">
-      <h1>Регистрация</h1>
-      
-      {/* 1. Выводим ошибку от бэкенда, если она есть */}
-      {error && <div className="error-general" style={{color: 'red', marginBottom: '10px'}}>{error}</div>}
+        {error && <div className="auth-error">{error}</div>}
 
-      <form onSubmit={handleSubmit}>
-        <div>
-          <label htmlFor="fullName">ФИО <span className="warning">*</span></label>
-          <br />
-          <input
-            type="text"
-            id="fullName"
-            name="fullname" // Должно совпадать с тем, что ждет бэкенд (у вас там fullname)
-            placeholder="Фамилия Имя Отчество"
-            value={formData.fullname} // Связка со стейтом
-            onChange={handleChange}   // Обработчик изменений
-          />
-        </div>
+        <form onSubmit={handleSubmit}>
+          <div>
+            <label htmlFor="fullName">
+              ФИО <span className="warning">*</span>
+            </label>
+            <br />
+            <input
+              type="text"
+              id="fullName"
+              name="fullname"
+              placeholder="Фамилия Имя Отчество"
+              value={formData.fullname}
+              onChange={handleChange}
+              required
+            />
+          </div>
 
-        <div>
-          <label htmlFor="login">Логин <span className="warning">*</span></label>
-          <br />
-          <input 
-            type="text" 
-            id="login" 
-            name="login" 
-            placeholder="login" 
-            value={formData.login}    // Связка со стейтом
-            onChange={handleChange} 
-          />
-        </div>
+          <div>
+            <label htmlFor="login">
+              Логин <span className="warning">*</span>
+            </label>
+            <br />
+            <input
+              type="text"
+              id="login"
+              name="login"
+              placeholder="login"
+              value={formData.login}
+              onChange={handleChange}
+              required
+            />
+          </div>
 
-        <div>
-          <label htmlFor="email">Электронная почта <span className="warning">*</span></label>
-          <br />
-          <input
-            type="text"
-            id="email"
-            name="email"
-            placeholder="example@email.com"
-            value={formData.email}    // Связка со стейтом
-            onChange={handleChange}
-          />
-        </div>
+          <div>
+            <label htmlFor="email">
+              Электронная почта <span className="warning">*</span>
+            </label>
+            <br />
+            <input
+              type="email"
+              id="email"
+              name="email"
+              placeholder="example@email.com"
+              value={formData.email}
+              onChange={handleChange}
+              required
+            />
+          </div>
 
-        {/* ПРИМЕР ДЛЯ ПАРОЛЯ */}
-        <div className="passwordField">
-          <label htmlFor="password">Пароль <span className="warning">*</span></label>
-          <br />
-          <input
-            type="password"
-            id="password"
-            name="password"
-            className="passwordPadding"
-            placeholder="••••••••"
-            value={formData.password} // Связка со стейтом
-            onChange={handleChange}
-          />
-          {/* Чекбокс для глаза оставляем как есть, он обычно работает через CSS или отдельный стейт */}
-          <input type="checkbox" id="seePassword1" className="toggle-checkbox" />
-          <label htmlFor="seePassword1" className="toggle-label">
-            <span className="eye-icon eye-open"></span>
+          <div className="passwordField auth-password-field">
+            <label htmlFor="password">
+              Пароль <span className="warning">*</span>
+            </label>
+            <br />
+            <input
+              type={showPassword ? 'text' : 'password'}
+              id="password"
+              name="password"
+              className="passwordPadding"
+              placeholder="••••••••"
+              value={formData.password}
+              onChange={handleChange}
+              required
+            />
+            <button
+              type="button"
+              className="password-toggle"
+              aria-label={showPassword ? 'Скрыть пароль' : 'Показать пароль'}
+              aria-pressed={showPassword}
+              onClick={() => setShowPassword((current) => !current)}
+            >
+              <span className={`eye-icon ${showPassword ? 'eye-closed' : 'eye-open'}`} />
+            </button>
+          </div>
+
+          <div>
+            <label htmlFor="gender">
+              Пол <span className="warning">*</span>
+            </label>
+            <br />
+            <select id="gender" name="gender" value={formData.gender} onChange={handleChange}>
+              <option value="male">Мужской</option>
+              <option value="female">Женский</option>
+            </select>
+          </div>
+
+          <label className="auth-checkbox-row" htmlFor="tosConfirm">
+            <input type="checkbox" id="tosConfirm" name="tosConfirm" required />
+            <span>
+              Я согласен с <a href="/tos.html">политикой обработки данных</a>
+            </span>
           </label>
-        </div>
 
-        {/* ВАЖНО: Добавьте выбор пола, так как ваш бэкенд его требует! */}
-        <div>
-          <label>Пол <span className="warning">*</span></label>
-          <br />
-          <select name="gender" value={formData.gender} onChange={handleChange}>
-            <option value="male">Мужской</option>
-            <option value="female">Женский</option>
-          </select>
-        </div>
+          <div className="auth-actions">
+            <button type="submit" disabled={isLoading}>
+              {isLoading ? 'Регистрация...' : 'Зарегистрироваться'}
+            </button>
 
-        <div>
-          <input
-            type="checkbox"
-            id="tosConfirm"
-            name="tosConfirm"
-            // Для чекбоксов логика чуть сложнее, но для начала можно оставить так
-          />
-          <label className="smallLabel" htmlFor="tosConfirm">
-            Я согласен с <a href="/tos.html">политикой обработки данных</a>
-          </label>
-        </div>
-        
-        <div style={{ marginTop: '20px' }}>
-          {/* Добавляем аттрибут disabled, чтобы нельзя было спамить кнопку во время загрузки */}
-          <button type="submit" disabled={isLoading}>
-            {isLoading ? 'Регистрация...' : 'Зарегистрироваться'}
-          </button>
-          
-          <p className="smallLabel">
-            Уже есть аккаунт? <a href="/login">Войти</a>
-          </p>
-          
-          {/* Кнопка назад через navigate(-1) */}
-          <button type="button" onClick={() => navigate(-1)}>Назад</button>
-        </div>
-      </form>
-    </div>
-  </>
-);
+            <p className="smallLabel textCentered auth-link-row">
+              Уже есть аккаунт?{' '}
+              <Link className="auth-blue-link" to="/login">
+                Войти
+              </Link>
+            </p>
+
+            <button className="auth-back-button" type="button" onClick={() => navigate(-1)}>
+              Назад
+            </button>
+          </div>
+        </form>
+      </div>
+    </main>
+  );
 }

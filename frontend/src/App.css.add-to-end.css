@@ -1,25 +1,126 @@
-/* ===== OperationForm working state ===== */
+/* === OPERATION FORM LAYOUT FIX START === */
+.operation-form {
+  display: grid;
+  gap: 18px;
+  padding: 28px 30px;
+  border-radius: 28px;
+  overflow: visible;
+}
 
-.form-notice {
-  margin-top: 16px;
-  padding: 12px 14px;
-  border-radius: 16px;
-  background: rgba(11, 79, 126, 0.08);
-  color: var(--primary);
+.operation-form__title {
+  margin: 0;
+  color: #10213f;
+  font-size: clamp(22px, 2.2vw, 30px);
+  font-weight: 900;
+  line-height: 1.15;
+}
+
+.operation-form__form {
+  display: grid;
+  gap: 16px;
+  width: 100%;
+}
+
+.operation-form__fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 14px;
+  align-items: end;
+}
+
+.operation-form__field {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  color: #10213f;
   font-size: 14px;
-  font-weight: 850;
+  font-weight: 900;
+  line-height: 1.2;
 }
 
-.primary-button:disabled {
+.operation-form__field--description {
+  grid-column: span 2;
+}
+
+.operation-form__field input,
+.operation-form__field select {
+  width: 100%;
+  min-width: 0;
+  height: 48px;
+  box-sizing: border-box;
+  border: 1px solid rgba(11, 79, 126, 0.18);
+  border-radius: 16px;
+  background: #fff;
+  color: #10213f;
+  padding: 0 16px;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 800;
+  outline: none;
+  box-shadow: none;
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    background 0.18s ease;
+}
+
+.operation-form__field input::placeholder {
+  color: #7b8ba5;
+  font-weight: 700;
+}
+
+.operation-form__field input:focus,
+.operation-form__field select:focus {
+  border-color: rgba(15, 95, 148, 0.58);
+  box-shadow: 0 0 0 4px rgba(15, 95, 148, 0.1);
+}
+
+.operation-form__notice {
+  margin: 0;
+  color: #0f5f94;
+  font-size: 14px;
+  font-weight: 900;
+}
+
+.operation-form__submit {
+  width: 100%;
+  min-height: 56px;
+  border: 0;
+  border-radius: 999px;
+  background: #0b4f7e;
+  color: #fff;
+  font: inherit;
+  font-size: 17px;
+  font-weight: 900;
+  cursor: pointer;
+  box-shadow: none;
+  transition:
+    transform 0.18s ease,
+    opacity 0.18s ease,
+    background 0.18s ease;
+}
+
+.operation-form__submit:not(:disabled):hover {
+  background: #0f5f94;
+  transform: translateY(-1px);
+}
+
+.operation-form__submit:disabled {
   cursor: not-allowed;
-  opacity: 0.68;
+  opacity: 0.62;
 }
 
-.primary-button:focus-visible,
-.input-like:focus-visible,
-.select-like:focus-visible {
-  outline: 3px solid rgba(100, 173, 247, 0.38);
-  outline-offset: 3px;
-}
+@media (max-width: 760px) {
+  .operation-form {
+    padding: 24px 18px;
+  }
 
-/* ===== End OperationForm working state ===== */
+  .operation-form__fields {
+    grid-template-columns: 1fr;
+  }
+
+  .operation-form__field--description {
+    grid-column: auto;
+  }
+}
+/* === OPERATION FORM LAYOUT FIX END === */

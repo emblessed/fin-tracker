@@ -1,9 +1,7 @@
 const express = require('express');
 const router = express.Router();
-
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
-
 const auth = require('../middleware/auth');
 const User = require('../models/User');
 const Family = require('../models/Family');
@@ -17,7 +15,9 @@ const DEFAULT_SETTINGS = {
 };
 
 function createToken(user) {
-  return jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: '24h' });
+  return jwt.sign({ userId: user._id }, process.env.JWT_SECRET, {
+    expiresIn: '24h',
+  });
 }
 
 function normalizeSettings(settings = {}) {
@@ -52,7 +52,12 @@ function getSettings(user) {
 }
 
 function getUserDisplayName(user) {
-  return user?.fullname?.trim() || user?.login?.trim() || user?.email?.trim() || 'пользователя';
+  return (
+    user?.fullname?.trim() ||
+    user?.login?.trim() ||
+    user?.email?.trim() ||
+    'пользователя'
+  );
 }
 
 function publicUser(user) {
@@ -82,6 +87,7 @@ function publicFamily(family) {
       fullname: member.user?.fullname || '',
       login: member.user?.login || '',
       email: member.user?.email || '',
+      avatarUrl: member.user?.avatarUrl || '',
       role: member.role,
       joinedAt: member.joinedAt,
     })),
@@ -100,6 +106,7 @@ function publicInvitation(invitation) {
       fullname: invitation.inviter?.fullname || '',
       login: invitation.inviter?.login || '',
       email: invitation.inviter?.email || '',
+      avatarUrl: invitation.inviter?.avatarUrl || '',
     },
     invitedEmail: invitation.invitedEmail,
     status: invitation.status,
@@ -128,17 +135,14 @@ async function getCurrentUser(req, res) {
 
 async function getCurrentFamily(userId) {
   return Family.findOne({ 'members.user': userId })
-    .populate('owner', 'fullname login email')
-    .populate('members.user', 'fullname login email');
+    .populate('owner', 'fullname login email avatarUrl')
+    .populate('members.user', 'fullname login email avatarUrl');
 }
 
 async function countPendingInvitations(user) {
   return FamilyInvitation.countDocuments({
     status: 'pending',
-    $or: [
-      { invitedUser: user._id },
-      { invitedEmail: user.email },
-    ],
+    $or: [{ invitedUser: user._id }, { invitedEmail: user.email }],
   });
 }
 
@@ -146,13 +150,10 @@ async function findUserPendingInvitation(user, invitationId) {
   return FamilyInvitation.findOne({
     _id: invitationId,
     status: 'pending',
-    $or: [
-      { invitedUser: user._id },
-      { invitedEmail: user.email },
-    ],
+    $or: [{ invitedUser: user._id }, { invitedEmail: user.email }],
   })
     .populate('family')
-    .populate('inviter', 'fullname login email');
+    .populate('inviter', 'fullname login email avatarUrl');
 }
 
 router.post('/register', async (req, res) => {
@@ -160,7 +161,9 @@ router.post('/register', async (req, res) => {
     const { fullname, login, email, password, gender } = req.body;
 
     if (!fullname || !login || !email || !password || !gender) {
-      return res.status(400).json({ message: 'Все поля обязательны для заполнения' });
+      return res.status(400).json({
+        message: 'Все поля обязательны для заполнения',
+      });
     }
 
     const cleanLogin = login.trim();
@@ -175,7 +178,6 @@ router.post('/register', async (req, res) => {
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
-
     const newUser = new User({
       fullname: fullname.trim(),
       login: cleanLogin,
@@ -205,7 +207,9 @@ router.post('/login', async (req, res) => {
     const { login, password } = req.body;
 
     if (!login || !password) {
-      return res.status(400).json({ message: 'Логин и пароль обязательны' });
+      return res.status(400).json({
+        message: 'Логин и пароль обязательны',
+      });
     }
 
     const cleanLogin = login.trim();
@@ -271,7 +275,9 @@ router.patch('/me', auth, async (req, res) => {
     } = req.body;
 
     if (!fullname || !login || !email) {
-      return res.status(400).json({ message: 'ФИО, логин и email обязательны' });
+      return res.status(400).json({
+        message: 'ФИО, логин и email обязательны',
+      });
     }
 
     const cleanLogin = login.trim();
@@ -306,14 +312,21 @@ router.patch('/me', auth, async (req, res) => {
         return res.status(400).json({ message: 'Введите текущий пароль' });
       }
 
-      const isPasswordCorrect = await bcrypt.compare(currentPassword, user.password);
+      const isPasswordCorrect = await bcrypt.compare(
+        currentPassword,
+        user.password
+      );
 
       if (!isPasswordCorrect) {
-        return res.status(400).json({ message: 'Текущий пароль указан неверно' });
+        return res.status(400).json({
+          message: 'Текущий пароль указан неверно',
+        });
       }
 
       if (newPassword.length < 6) {
-        return res.status(400).json({ message: 'Новый пароль должен быть не короче 6 символов' });
+        return res.status(400).json({
+          message: 'Новый пароль должен быть не короче 6 символов',
+        });
       }
 
       user.password = await bcrypt.hash(newPassword, 10);
@@ -356,7 +369,9 @@ router.get('/family/status', auth, async (req, res) => {
     });
   } catch (error) {
     console.error('Family Status Error:', error);
-    res.status(500).json({ message: 'Ошибка сервера при загрузке семейного доступа' });
+    res.status(500).json({
+      message: 'Ошибка сервера при загрузке семейного доступа',
+    });
   }
 });
 
@@ -371,10 +386,13 @@ router.post('/family', auth, async (req, res) => {
     const existingFamily = await getCurrentFamily(user._id);
 
     if (existingFamily) {
-      return res.status(400).json({ message: 'У пользователя уже есть семья' });
+      return res.status(400).json({
+        message: 'У пользователя уже есть семья',
+      });
     }
 
-    const requestedName = typeof req.body.name === 'string' ? req.body.name.trim() : '';
+    const requestedName =
+      typeof req.body.name === 'string' ? req.body.name.trim() : '';
     const name = requestedName || `Семья ${getUserDisplayName(user)}`;
 
     const family = new Family({
@@ -416,19 +434,18 @@ router.get('/family/invitations', auth, async (req, res) => {
 
     const invitations = await FamilyInvitation.find({
       status: 'pending',
-      $or: [
-        { invitedUser: user._id },
-        { invitedEmail: user.email },
-      ],
+      $or: [{ invitedUser: user._id }, { invitedEmail: user.email }],
     })
       .sort({ createdAt: -1 })
       .populate('family')
-      .populate('inviter', 'fullname login email');
+      .populate('inviter', 'fullname login email avatarUrl');
 
     res.json({ invitations: invitations.map(publicInvitation) });
   } catch (error) {
     console.error('Family Invitations Load Error:', error);
-    res.status(500).json({ message: 'Ошибка сервера при загрузке приглашений' });
+    res.status(500).json({
+      message: 'Ошибка сервера при загрузке приглашений',
+    });
   }
 });
 
@@ -446,20 +463,27 @@ router.post('/family/invitations', auth, async (req, res) => {
       return res.status(400).json({ message: 'Сначала создайте семью' });
     }
 
-    const email = typeof req.body.email === 'string' ? req.body.email.toLowerCase().trim() : '';
+    const email =
+      typeof req.body.email === 'string'
+        ? req.body.email.toLowerCase().trim()
+        : '';
 
     if (!email) {
       return res.status(400).json({ message: 'Введите email участника' });
     }
 
     if (email === user.email) {
-      return res.status(400).json({ message: 'Нельзя пригласить самого себя' });
+      return res.status(400).json({
+        message: 'Нельзя пригласить самого себя',
+      });
     }
 
     const invitedUser = await User.findOne({ email });
 
     if (invitedUser?.familyId || (invitedUser && (await getCurrentFamily(invitedUser._id)))) {
-      return res.status(400).json({ message: 'У этого пользователя уже есть семья' });
+      return res.status(400).json({
+        message: 'У этого пользователя уже есть семья',
+      });
     }
 
     const existingInvitation = await FamilyInvitation.findOne({
@@ -480,9 +504,8 @@ router.post('/family/invitations', auth, async (req, res) => {
     });
 
     await invitation.save();
-
     await invitation.populate('family');
-    await invitation.populate('inviter', 'fullname login email');
+    await invitation.populate('inviter', 'fullname login email avatarUrl');
 
     res.status(201).json({
       message: 'Приглашение отправлено',
@@ -490,7 +513,9 @@ router.post('/family/invitations', auth, async (req, res) => {
     });
   } catch (error) {
     console.error('Family Invitation Create Error:', error);
-    res.status(500).json({ message: 'Ошибка сервера при отправке приглашения' });
+    res.status(500).json({
+      message: 'Ошибка сервера при отправке приглашения',
+    });
   }
 });
 
@@ -505,7 +530,9 @@ router.patch('/family/invitations/:id/accept', auth, async (req, res) => {
     const currentFamily = await getCurrentFamily(user._id);
 
     if (currentFamily) {
-      return res.status(400).json({ message: 'У пользователя уже есть семья' });
+      return res.status(400).json({
+        message: 'У пользователя уже есть семья',
+      });
     }
 
     const invitation = await findUserPendingInvitation(user, req.params.id);
@@ -515,7 +542,9 @@ router.patch('/family/invitations/:id/accept', auth, async (req, res) => {
     }
 
     const family = invitation.family;
-    const alreadyMember = family.members.some((member) => String(member.user) === String(user._id));
+    const alreadyMember = family.members.some(
+      (member) => String(member.user) === String(user._id)
+    );
 
     if (!alreadyMember) {
       family.members.push({
@@ -536,10 +565,7 @@ router.patch('/family/invitations/:id/accept', auth, async (req, res) => {
       {
         _id: { $ne: invitation._id },
         status: 'pending',
-        $or: [
-          { invitedUser: user._id },
-          { invitedEmail: user.email },
-        ],
+        $or: [{ invitedUser: user._id }, { invitedEmail: user.email }],
       },
       {
         $set: {
@@ -560,7 +586,9 @@ router.patch('/family/invitations/:id/accept', auth, async (req, res) => {
     });
   } catch (error) {
     console.error('Family Invitation Accept Error:', error);
-    res.status(500).json({ message: 'Ошибка сервера при принятии приглашения' });
+    res.status(500).json({
+      message: 'Ошибка сервера при принятии приглашения',
+    });
   }
 });
 
@@ -590,7 +618,9 @@ router.patch('/family/invitations/:id/decline', auth, async (req, res) => {
     });
   } catch (error) {
     console.error('Family Invitation Decline Error:', error);
-    res.status(500).json({ message: 'Ошибка сервера при отклонении приглашения' });
+    res.status(500).json({
+      message: 'Ошибка сервера при отклонении приглашения',
+    });
   }
 });
 

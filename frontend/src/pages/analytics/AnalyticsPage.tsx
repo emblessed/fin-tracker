@@ -1,9 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from "react";
 
-import './style.css';
-
-type AnalyticsView = 'personal' | 'family';
-type PeriodId = 'all' | 'today' | 'week' | 'month' | 'custom';
+type AnalyticsView = "personal" | "family";
+type PeriodId = "all" | "today" | "week" | "month" | "custom";
 
 type ApiTransaction = {
   _id?: string;
@@ -11,6 +9,7 @@ type ApiTransaction = {
   transactionNum?: number;
   amount: number;
   date: string;
+  createdAt?: string;
   categoryInfo?: string;
   category?: string;
   bank?: string;
@@ -34,102 +33,98 @@ type CategoryItem = {
   percent: number;
 };
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-const TRANSACTIONS_PAGE_LIMIT = 200;
+type TransactionsResponse = {
+  data?: ApiTransaction[];
+  totalPages?: number;
+};
+
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+const TRANSACTIONS_FETCH_LIMIT = 200;
+const OPERATIONS_PER_PAGE = 50;
 
 const categoryLabels: Record<string, string> = {
-  salary: 'Зарплата',
-  income: 'Доходы',
-  project: 'Проекты',
-  projects: 'Проекты',
-  transfer: 'Переводы',
-  transfers: 'Переводы',
-  withdrawal: 'Снятие наличных',
-  withdraw: 'Снятие наличных',
-  refund: 'Возврат',
-  qr: 'QR',
-  products: 'Продукты',
-  product: 'Продукты',
-  food: 'Еда',
-  supermarket: 'Супермаркеты',
-  markets: 'Супермаркеты',
-  transport: 'Транспорт',
-  taxi: 'Такси',
-  restaurant: 'Рестораны',
-  restaurants: 'Рестораны',
-  cafe: 'Кафе',
-  services: 'Услуги',
-  service: 'Услуги',
-  cash: 'Наличные',
-  entertainment: 'Развлечения',
-  health: 'Здоровье',
-  pharmacy: 'Аптеки',
-  home: 'Дом',
-  education: 'Образование',
-  subscriptions: 'Подписки',
-  communication: 'Связь',
-  mobile: 'Связь',
-  utilities: 'Коммунальные услуги',
-  travel: 'Путешествия',
-  other: 'Другое',
-  others: 'Другое',
+  salary: "Зарплата",
+  salaries: "Зарплата",
+  income: "Доходы",
+  transfer: "Переводы",
+  transfers: "Переводы",
+  products: "Продукты",
+  product: "Продукты",
+  food: "Еда",
+  groceries: "Продукты",
+  grocery: "Продукты",
+  others: "Другое",
+  other: "Другое",
+  misc: "Другое",
+  miscellaneous: "Другое",
+  transport: "Транспорт",
+  transportation: "Транспорт",
+  taxi: "Такси",
+  fuel: "Топливо",
+  automobile: "Автомобиль",
+  auto: "Автомобиль",
+  car: "Автомобиль",
+  cars: "Автомобиль",
+  restaurant: "Рестораны",
+  restaurants: "Рестораны",
+  cafe: "Кафе",
+  cafes: "Кафе",
+  supermarket: "Супермаркеты",
+  supermarkets: "Супермаркеты",
+  cash: "Наличные",
+  services: "Услуги",
+  service: "Услуги",
+  utilities: "Коммунальные услуги",
+  entertainment: "Развлечения",
+  health: "Здоровье",
+  home: "Дом",
+  house: "Дом",
+  pharmacy: "Аптеки",
+  pharmacies: "Аптеки",
+  drugstore: "Аптеки",
+  medicine: "Аптеки",
+  education: "Образование",
+  cloth: "Одежда",
+  clothes: "Одежда",
+  clothing: "Одежда",
+  apparel: "Одежда",
+  shopping: "Покупки",
+  beauty: "Красота",
+  sport: "Спорт",
+  sports: "Спорт",
+  travel: "Путешествия",
+  hotel: "Отели",
+  hotels: "Отели",
+  internet: "Интернет",
+  mobile: "Связь",
+  communication: "Связь",
+  subscription: "Подписки",
+  subscriptions: "Подписки",
+  insurance: "Страхование",
+  tax: "Налоги",
+  taxes: "Налоги",
+  fees: "Комиссии",
+  fee: "Комиссии",
+  withdrawal: "Снятие наличных",
+  withdrawals: "Снятие наличных",
+  atm: "Снятие наличных",
+  refund: "Возврат",
+  refunds: "Возврат",
+  qr: "QR",
 };
 
 const periods: Array<{ id: PeriodId; label: string }> = [
-  { id: 'all', label: 'Все время' },
-  { id: 'today', label: 'Сегодня' },
-  { id: 'week', label: 'Эта неделя' },
-  { id: 'month', label: 'Этот месяц' },
-  { id: 'custom', label: 'Свой период' },
-];
-
-const familyFallbackTransactions: Transaction[] = [
-  {
-    id: 'family-1',
-    amount: 85000,
-    date: '2026-03-29',
-    category: 'salary',
-    bank: 'Семейный счёт',
-    description: 'Зарплата',
-  },
-  {
-    id: 'family-2',
-    amount: 90000,
-    date: '2026-03-27',
-    category: 'projects',
-    bank: 'Семейный счёт',
-    description: 'Проекты',
-  },
-  {
-    id: 'family-3',
-    amount: -9000,
-    date: '2026-03-24',
-    category: 'products',
-    bank: 'Семейный счёт',
-    description: 'Продукты',
-  },
-  {
-    id: 'family-4',
-    amount: -2000,
-    date: '2026-03-21',
-    category: 'transport',
-    bank: 'Семейный счёт',
-    description: 'Транспорт',
-  },
-  {
-    id: 'family-5',
-    amount: -29000,
-    date: '2026-03-18',
-    category: 'entertainment',
-    bank: 'Семейный счёт',
-    description: 'Развлечения',
-  },
+  { id: "all", label: "Все время" },
+  { id: "today", label: "Сегодня" },
+  { id: "week", label: "Эта неделя" },
+  { id: "month", label: "Этот месяц" },
+  { id: "custom", label: "Свой период" },
 ];
 
 const formatDate = (date: Date) => {
   const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
 
   return `${year}-${month}-${day}`;
 };
@@ -138,112 +133,117 @@ const formatDisplayDate = (dateValue: string) => {
   const date = new Date(dateValue);
 
   if (Number.isNaN(date.getTime())) {
-    return '—';
+    return "—";
   }
 
-  return date.toLocaleDateString('ru-RU');
+  return date.toLocaleDateString("ru-RU");
 };
 
 const formatMoney = (value: number) =>
-  new Intl.NumberFormat('ru-RU', {
-    style: 'currency',
-    currency: 'RUB',
+  new Intl.NumberFormat("ru-RU", {
+    style: "currency",
+    currency: "RUB",
     maximumFractionDigits: Math.abs(value) % 1 === 0 ? 0 : 2,
   }).format(value);
 
 const normalizeCategory = (value?: string) => {
-  const category = value?.trim().toLowerCase();
+  const category = value?.trim();
 
-  if (!category) return 'other';
-  if (category.includes('зарп') || category.includes('salary') || category.includes('payroll')) return 'salary';
-  if (category.includes('проект') || category.includes('project')) return 'projects';
-  if (category.includes('перев') || category.includes('transfer')) return 'transfers';
-  if (category.includes('withdrawal') || category.includes('withdraw') || category.includes('сняти')) return 'withdrawal';
-  if (category.includes('refund') || category.includes('возврат')) return 'refund';
-  if (category === 'qr' || category.includes(' qr') || category.includes('qr ') || category.includes('сбп')) return 'qr';
-  if (category.includes('продукт') || category.includes('product')) return 'products';
-  if (category.includes('еда') || category.includes('food')) return 'food';
-  if (category.includes('supermarket') || category.includes('супермаркет') || category.includes('market')) return 'supermarket';
-  if (category.includes('transport') || category.includes('транспорт')) return 'transport';
-  if (category.includes('taxi') || category.includes('такси')) return 'taxi';
-  if (category.includes('restaurant') || category.includes('ресторан')) return 'restaurants';
-  if (category.includes('cafe') || category.includes('кафе')) return 'cafe';
-  if (category.includes('service') || category.includes('услуг')) return 'services';
-  if (category.includes('cash') || category.includes('налич')) return 'cash';
-  if (category.includes('entertainment') || category.includes('развлеч')) return 'entertainment';
-  if (category.includes('health') || category.includes('здоров')) return 'health';
-  if (category.includes('pharmacy') || category.includes('аптек')) return 'pharmacy';
-  if (category.includes('home') || category.includes('дом')) return 'home';
-  if (category.includes('education') || category.includes('образован')) return 'education';
-  if (category.includes('subscription') || category.includes('подпис')) return 'subscriptions';
-  if (category.includes('communication') || category.includes('mobile') || category.includes('связь')) return 'communication';
-  if (category.includes('utilities') || category.includes('коммун')) return 'utilities';
-  if (category.includes('travel') || category.includes('путеше')) return 'travel';
-  if (category.includes('other') || category.includes('другое')) return 'other';
+  if (!category) {
+    return "other";
+  }
 
   return category;
 };
 
 const getCategoryLabel = (category: string) => {
-  const normalized = normalizeCategory(category);
-  return categoryLabels[normalized] || normalized[0]?.toUpperCase() + normalized.slice(1) || 'Другое';
-};
+  const categoryKey = category.toLowerCase();
 
-const translateDescription = (description: string, category: string) => {
-  const normalizedDescription = normalizeCategory(description);
-  const normalizedCategory = normalizeCategory(category);
-
-  if (categoryLabels[normalizedDescription]) {
-    return categoryLabels[normalizedDescription];
+  if (categoryLabels[categoryKey]) {
+    return categoryLabels[categoryKey];
   }
 
-  if (!description || description.trim().toLowerCase() === normalizedCategory) {
-    return getCategoryLabel(normalizedCategory);
+  if (/^[a-z][a-z\s_-]*$/i.test(category)) {
+    return "Другое";
   }
 
-  return description;
+  return category;
 };
 
-const getPeriodRange = (periodId: PeriodId, customFrom: string, customTo: string) => {
+const getPeriodRange = (
+  periodId: PeriodId,
+  customFrom: string,
+  customTo: string,
+) => {
   const now = new Date();
   const today = formatDate(now);
 
   switch (periodId) {
-    case 'today':
-      return { from: today, to: today };
-    case 'week': {
+    case "today":
+      return {
+        from: today,
+        to: today,
+      };
+
+    case "week": {
       const firstDay = new Date(now);
       const currentDay = firstDay.getDay();
       const diffToMonday = currentDay === 0 ? -6 : 1 - currentDay;
       firstDay.setDate(firstDay.getDate() + diffToMonday);
 
-      return { from: formatDate(firstDay), to: today };
+      return {
+        from: formatDate(firstDay),
+        to: today,
+      };
     }
-    case 'month':
-      return { from: formatDate(new Date(now.getFullYear(), now.getMonth(), 1)), to: today };
-    case 'custom':
-      return { from: customFrom, to: customTo };
-    case 'all':
+
+    case "month":
+      return {
+        from: formatDate(new Date(now.getFullYear(), now.getMonth(), 1)),
+        to: today,
+      };
+
+    case "custom":
+      return {
+        from: customFrom,
+        to: customTo,
+      };
+
+    case "all":
     default:
-      return { from: '2000-01-01', to: today };
+      return {
+        from: "2000-01-01",
+        to: today,
+      };
   }
 };
 
-const mapApiTransaction = (transaction: ApiTransaction, index: number): Transaction => {
-  const category = normalizeCategory(transaction.categoryInfo || transaction.category);
-  const rawDescription = transaction.description || transaction.commentary || getCategoryLabel(category);
+const mapApiTransaction = (
+  transaction: ApiTransaction,
+  index: number,
+): Transaction => {
+  const category = normalizeCategory(
+    transaction.categoryInfo || transaction.category,
+  );
 
   return {
     id: transaction._id || transaction.id || `transaction-${index}`,
     amount: Number(transaction.amount) || 0,
-    date: transaction.date,
+    date: transaction.date || transaction.createdAt || "",
     category,
-    bank: transaction.bank || 'Общий счёт',
-    description: translateDescription(rawDescription, category),
+    bank: transaction.bank || "Общий счёт",
+    description:
+      transaction.description ||
+      transaction.commentary ||
+      getCategoryLabel(category),
   };
 };
 
-const filterTransactionsByDate = (transactions: Transaction[], dateFrom: string, dateTo: string) => {
+const filterTransactionsByDate = (
+  transactions: Transaction[],
+  dateFrom: string,
+  dateTo: string,
+) => {
   const fromTime = new Date(`${dateFrom}T00:00:00`).getTime();
   const toTime = new Date(`${dateTo}T23:59:59`).getTime();
 
@@ -258,17 +258,26 @@ const filterTransactionsByDate = (transactions: Transaction[], dateFrom: string,
   });
 };
 
-const groupByCategory = (transactions: Transaction[], type: 'income' | 'expense'): CategoryItem[] => {
-  const isIncome = type === 'income';
+const groupByCategory = (
+  transactions: Transaction[],
+  type: "income" | "expense",
+): CategoryItem[] => {
+  const isIncome = type === "income";
   const filtered = transactions.filter((transaction) =>
     isIncome ? transaction.amount > 0 : transaction.amount < 0,
   );
-  const total = filtered.reduce((sum, transaction) => sum + Math.abs(transaction.amount), 0);
-  const grouped = filtered.reduce<Record<string, number>>((acc, transaction) => {
-    const category = normalizeCategory(transaction.category);
-    acc[category] = (acc[category] || 0) + Math.abs(transaction.amount);
-    return acc;
-  }, {});
+  const total = filtered.reduce(
+    (sum, transaction) => sum + Math.abs(transaction.amount),
+    0,
+  );
+  const grouped = filtered.reduce<Record<string, number>>(
+    (acc, transaction) => {
+      acc[transaction.category] =
+        (acc[transaction.category] || 0) + Math.abs(transaction.amount);
+      return acc;
+    },
+    {},
+  );
 
   return Object.entries(grouped)
     .map(([key, value]) => ({
@@ -296,35 +305,86 @@ const buildExportText = (
   const rows = transactions
     .map(
       (transaction) =>
-        `${formatDisplayDate(transaction.date)} | ${transaction.description} | ${getCategoryLabel(
-          transaction.category,
-        )} | ${transaction.bank} | ${formatMoney(transaction.amount)}`,
+        `${formatDisplayDate(transaction.date)} | ${transaction.description} | ${transaction.bank} | ${formatMoney(
+          transaction.amount,
+        )}`,
     )
-    .join('\n');
+    .join("\n");
 
   return [
-    `Аналитика: ${view === 'personal' ? 'Личная' : 'Семейная'}`,
+    `Аналитика: ${view === "personal" ? "Личная" : "Семейная"}`,
     `Период: ${dateFrom} — ${dateTo}`,
     `Баланс: ${formatMoney(balance)}`,
     `Доходы: ${formatMoney(income)}`,
     `Расходы: ${formatMoney(expenses)}`,
-    '',
-    'Операции:',
-    rows || 'Нет операций',
-  ].join('\n');
+    "",
+    "Операции:",
+    rows || "Нет операций",
+  ].join("\n");
+};
+
+const buildPaginationItems = (page: number, totalPages: number) => {
+  const pages = new Set<number>([1, totalPages, page, page - 1, page + 1]);
+
+  return [...pages]
+    .filter((item) => item >= 1 && item <= totalPages)
+    .sort((a, b) => a - b);
+};
+
+const loadAllTransactions = async (
+  endpoint: "/api/transactions" | "/api/family/transactions",
+  dateFrom: string,
+  dateTo: string,
+  signal: AbortSignal,
+) => {
+  const token = localStorage.getItem("token");
+  const allTransactions: ApiTransaction[] = [];
+  let page = 1;
+  let totalPages = 1;
+
+  do {
+    const url = new URL(endpoint, API_URL);
+    url.searchParams.set("dateFrom", dateFrom);
+    url.searchParams.set("dateTo", dateTo);
+    url.searchParams.set("page", String(page));
+    url.searchParams.set("limit", String(TRANSACTIONS_FETCH_LIMIT));
+    url.searchParams.set("sortBy", "date");
+    url.searchParams.set("order", "desc");
+
+    const response = await fetch(url.toString(), {
+      signal,
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error("Не удалось загрузить операции");
+    }
+
+    const result: TransactionsResponse = await response.json();
+    allTransactions.push(...(Array.isArray(result.data) ? result.data : []));
+    totalPages = Math.max(1, Number(result.totalPages) || 1);
+    page += 1;
+  } while (page <= totalPages);
+
+  return allTransactions.map(mapApiTransaction);
 };
 
 export default function AnalyticsPage() {
-  const [activeView, setActiveView] = useState<AnalyticsView>('personal');
-  const [selectedPeriod, setSelectedPeriod] = useState<PeriodId>('all');
-  const [customFrom, setCustomFrom] = useState('2000-01-01');
+  const activeView: AnalyticsView = "personal";
+  const [selectedPeriod, setSelectedPeriod] = useState<PeriodId>("all");
+  const [customFrom, setCustomFrom] = useState("2000-01-01");
   const [customTo, setCustomTo] = useState(formatDate(new Date()));
-  const [personalTransactions, setPersonalTransactions] = useState<Transaction[]>([]);
-  const [loadedCount, setLoadedCount] = useState(0);
-  const [totalCount, setTotalCount] = useState(0);
+  const [personalTransactions, setPersonalTransactions] = useState<
+    Transaction[]
+  >([]);
+  const [familyTransactions, setFamilyTransactions] = useState<Transaction[]>(
+    [],
+  );
   const [isLoading, setIsLoading] = useState(false);
-  const [loadError, setLoadError] = useState('');
-  const [expanded, setExpanded] = useState(false);
+  const [loadError, setLoadError] = useState("");
+  const [operationsPage, setOperationsPage] = useState(1);
 
   const { from: dateFrom, to: dateTo } = useMemo(
     () => getPeriodRange(selectedPeriod, customFrom, customTo),
@@ -332,78 +392,51 @@ export default function AnalyticsPage() {
   );
 
   useEffect(() => {
-    if (activeView !== 'personal') {
-      return;
-    }
-
     const controller = new AbortController();
 
-    const loadPersonalAnalytics = async () => {
-      const token = localStorage.getItem('token');
-
-      if (!token) {
-        setLoadError('Нет токена авторизации. Войдите в аккаунт заново.');
-        setPersonalTransactions([]);
-        setLoadedCount(0);
-        setTotalCount(0);
-        return;
-      }
-
+    const loadAnalytics = async () => {
       setIsLoading(true);
-      setLoadError('');
-      setLoadedCount(0);
-      setTotalCount(0);
+      setLoadError("");
 
       try {
-        const allTransactions: ApiTransaction[] = [];
-        let currentPage = 1;
-        let totalPages = 1;
+        const endpoint =
+          activeView === "personal"
+            ? "/api/transactions"
+            : "/api/family/transactions";
+        const loadedTransactions = await loadAllTransactions(
+          endpoint,
+          dateFrom,
+          dateTo,
+          controller.signal,
+        );
 
-        do {
-          const url = new URL('/api/transactions', API_URL);
-          url.searchParams.set('dateFrom', dateFrom);
-          url.searchParams.set('dateTo', dateTo);
-          url.searchParams.set('page', String(currentPage));
-          url.searchParams.set('limit', String(TRANSACTIONS_PAGE_LIMIT));
-          url.searchParams.set('sortBy', 'date');
-          url.searchParams.set('order', 'desc');
-
-          const response = await fetch(url.toString(), {
-            signal: controller.signal,
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          });
-
-          if (!response.ok) {
-            throw new Error('Не удалось загрузить операции');
-          }
-
-          const result = await response.json();
-          const pageTransactions = Array.isArray(result.data) ? result.data : [];
-
-          allTransactions.push(...pageTransactions);
-          setLoadedCount(allTransactions.length);
-          setTotalCount(Number(result.total) || allTransactions.length);
-
-          totalPages = Number(result.totalPages) || 1;
-          currentPage += 1;
-        } while (currentPage <= totalPages && currentPage <= 1000);
-
-        setPersonalTransactions(allTransactions.map(mapApiTransaction));
+        if (activeView === "personal") {
+          setPersonalTransactions(loadedTransactions);
+        } else {
+          setFamilyTransactions(loadedTransactions);
+        }
       } catch (error) {
-        if (error instanceof DOMException && error.name === 'AbortError') {
+        if (error instanceof DOMException && error.name === "AbortError") {
           return;
         }
 
-        setLoadError('Не удалось загрузить личную аналитику. Проверь backend и API.');
-        setPersonalTransactions([]);
+        setLoadError(
+          activeView === "personal"
+            ? "Не удалось загрузить личную аналитику. Проверь backend и API."
+            : "Не удалось загрузить семейную аналитику. Проверь семью и API.",
+        );
+
+        if (activeView === "personal") {
+          setPersonalTransactions([]);
+        } else {
+          setFamilyTransactions([]);
+        }
       } finally {
         setIsLoading(false);
       }
     };
 
-    loadPersonalAnalytics();
+    loadAnalytics();
 
     return () => {
       controller.abort();
@@ -411,61 +444,86 @@ export default function AnalyticsPage() {
   }, [activeView, dateFrom, dateTo]);
 
   useEffect(() => {
-    setExpanded(false);
+    setOperationsPage(1);
   }, [activeView, selectedPeriod, customFrom, customTo]);
 
   const currentTransactions = useMemo(() => {
-    if (activeView === 'personal') {
+    if (activeView === "personal") {
       return personalTransactions;
     }
 
-    return filterTransactionsByDate(familyFallbackTransactions, dateFrom, dateTo);
-  }, [activeView, dateFrom, dateTo, personalTransactions]);
+    return filterTransactionsByDate(familyTransactions, dateFrom, dateTo);
+  }, [activeView, dateFrom, dateTo, familyTransactions, personalTransactions]);
 
   const income = useMemo(
-    () => currentTransactions
-      .filter((transaction) => transaction.amount > 0)
-      .reduce((sum, transaction) => sum + transaction.amount, 0),
+    () =>
+      currentTransactions
+        .filter((transaction) => transaction.amount > 0)
+        .reduce((sum, transaction) => sum + transaction.amount, 0),
     [currentTransactions],
   );
-
   const expenses = useMemo(
-    () => currentTransactions
-      .filter((transaction) => transaction.amount < 0)
-      .reduce((sum, transaction) => sum + Math.abs(transaction.amount), 0),
+    () =>
+      currentTransactions
+        .filter((transaction) => transaction.amount < 0)
+        .reduce((sum, transaction) => sum + Math.abs(transaction.amount), 0),
     [currentTransactions],
   );
-
   const balance = income - expenses;
-
   const expenseCategories = useMemo(
-    () => groupByCategory(currentTransactions, 'expense'),
+    () => groupByCategory(currentTransactions, "expense"),
     [currentTransactions],
   );
-
   const incomeCategories = useMemo(
-    () => groupByCategory(currentTransactions, 'income'),
+    () => groupByCategory(currentTransactions, "income"),
     [currentTransactions],
   );
 
-  const visibleTransactions = expanded ? currentTransactions : currentTransactions.slice(0, 8);
+  const totalOperationPages = Math.max(
+    1,
+    Math.ceil(currentTransactions.length / OPERATIONS_PER_PAGE),
+  );
+  const safeOperationsPage = Math.min(operationsPage, totalOperationPages);
+  const visibleTransactions = currentTransactions.slice(
+    (safeOperationsPage - 1) * OPERATIONS_PER_PAGE,
+    safeOperationsPage * OPERATIONS_PER_PAGE,
+  );
+  const paginationItems = buildPaginationItems(
+    safeOperationsPage,
+    totalOperationPages,
+  );
+  const rangeFrom = currentTransactions.length
+    ? (safeOperationsPage - 1) * OPERATIONS_PER_PAGE + 1
+    : 0;
+  const rangeTo = Math.min(
+    safeOperationsPage * OPERATIONS_PER_PAGE,
+    currentTransactions.length,
+  );
 
   const handlePeriodClick = (periodId: PeriodId) => {
     setSelectedPeriod(periodId);
     const range = getPeriodRange(periodId, customFrom, customTo);
 
-    if (periodId !== 'custom') {
+    if (periodId !== "custom") {
       setCustomFrom(range.from);
       setCustomTo(range.to);
     }
   };
 
-  const handleExport = () => {
-    const text = buildExportText(activeView, dateFrom, dateTo, currentTransactions);
-    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
-    const fileUrl = URL.createObjectURL(blob);
-    const link = document.createElement('a');
+  const changeOperationsPage = (nextPage: number) => {
+    setOperationsPage(Math.min(Math.max(nextPage, 1), totalOperationPages));
+  };
 
+  const handleExport = () => {
+    const text = buildExportText(
+      activeView,
+      dateFrom,
+      dateTo,
+      currentTransactions,
+    );
+    const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+    const fileUrl = URL.createObjectURL(blob);
+    const link = document.createElement("a");
     link.href = fileUrl;
     link.download = `analytics-${activeView}-${dateFrom}-${dateTo}.txt`;
     link.click();
@@ -474,168 +532,216 @@ export default function AnalyticsPage() {
 
   return (
     <main className="analytics-page">
-      <section className="analytics-shell">
-        <div className="analytics-view-tabs" aria-label="Тип аналитики">
-          <button
-            className={`analytics-tab ${activeView === 'personal' ? 'active' : ''}`}
-            type="button"
-            onClick={() => setActiveView('personal')}
-          >
-            Личная аналитика
-          </button>
-          <button
-            className={`analytics-tab ${activeView === 'family' ? 'active' : ''}`}
-            type="button"
-            onClick={() => setActiveView('family')}
-          >
-            Семейная аналитика
-          </button>
+      <section className="analytics-hero panel">
+        <div>
+          <h1>Аналитика</h1>
+          <p>
+            Наглядная статистика по доходам, расходам и операциям за выбранный
+            период.
+          </p>
+        </div>
+      </section>
+
+      <section className="panel periods-card period-selector">
+        <div className="chips-row" style={{ justifyContent: "space-between" }}>
+          <h2 className="section-title period-title period-selector__title">
+            Периоды
+          </h2>
+          <span className="small-badge">
+            {dateFrom} — {dateTo}
+          </span>
         </div>
 
-        <section className="analytics-card analytics-period-card">
-          <div className="analytics-section-header">
-            <div>
-              <h2>Периоды</h2>
-              <p>Выбрано: {dateFrom} — {dateTo}</p>
-            </div>
-            {isLoading && activeView === 'personal' && (
-              <span className="analytics-loading-pill">
-                Загружено {loadedCount} из {totalCount || '...'}
-              </span>
-            )}
-          </div>
+        <div className="period-selector__chips" aria-label="Выбор периода">
+          {periods.map((period) => (
+            <button
+              key={period.id}
+              type="button"
+              className={`period-chip period-selector__chip ${selectedPeriod === period.id ? "active" : ""}`}
+              onClick={() => handlePeriodClick(period.id)}
+            >
+              {period.label}
+            </button>
+          ))}
+        </div>
 
-          <div className="analytics-periods">
-            {periods.map((period) => (
-              <button
-                className={`analytics-period-button ${selectedPeriod === period.id ? 'active' : ''}`}
-                key={period.id}
-                type="button"
-                onClick={() => handlePeriodClick(period.id)}
-              >
-                {period.label}
-              </button>
+        <div className="period-selector__date-row">
+          <label className="period-selector__date-pill">
+            <span>С</span>
+            <input
+              type="date"
+              value={customFrom}
+              onChange={(event) => {
+                setSelectedPeriod("custom");
+                setCustomFrom(event.target.value);
+              }}
+            />
+          </label>
+          <span className="period-selector__date-separator">—</span>
+          <label className="period-selector__date-pill">
+            <span>По</span>
+            <input
+              type="date"
+              value={customTo}
+              onChange={(event) => {
+                setSelectedPeriod("custom");
+                setCustomTo(event.target.value);
+              }}
+            />
+          </label>
+        </div>
+      </section>
+
+      {loadError && <p className="profile-error">{loadError}</p>}
+
+      <section className="analytics-summary-grid">
+        <article className="panel stat-card">
+          <div className="stat-label">Баланс за период</div>
+          <div className="stat-value">{formatMoney(balance)}</div>
+        </article>
+        <article className="panel stat-card">
+          <div className="stat-label">Доходы</div>
+          <div className="stat-value green">{formatMoney(income)}</div>
+        </article>
+        <article className="panel stat-card">
+          <div className="stat-label">Расходы</div>
+          <div className="stat-value red">{formatMoney(expenses)}</div>
+        </article>
+      </section>
+
+      <section className="analytics-grid">
+        <CategoryBlock
+          title="Расходы по категориям"
+          items={expenseCategories}
+          emptyText="Расходов за выбранный период нет"
+          type="expense"
+        />
+        <CategoryBlock
+          title="Доходы по категориям"
+          items={incomeCategories}
+          emptyText="Доходов за выбранный период нет"
+          type="income"
+        />
+      </section>
+
+      <section className="panel operations-card operations-list">
+        <div className="operations-list__header">
+          <div>
+            <h2 className="section-title operations-list__title">
+              Все операции
+            </h2>
+            <p className="operations-list__subtitle">
+              Операции за выбранный период
+            </p>
+          </div>
+          <span className="operations-list__count">
+            {currentTransactions.length}
+          </span>
+        </div>
+
+        {isLoading ? (
+          <div className="operations-list__empty">Загружаем операции...</div>
+        ) : visibleTransactions.length > 0 ? (
+          <div className="operations-list__items">
+            {visibleTransactions.map((transaction) => (
+              <article className="operation-row" key={transaction.id}>
+                <div
+                  className={`operation-row__icon operation-row__icon--${
+                    transaction.amount >= 0 ? "green" : "red"
+                  }`}
+                >
+                  {transaction.amount >= 0 ? "+" : "−"}
+                </div>
+                <div className="operation-row__main">
+                  <strong className="operation-row__title">
+                    {transaction.description ||
+                      getCategoryLabel(transaction.category)}
+                  </strong>
+                  <span className="operation-row__tag">
+                    {getCategoryLabel(transaction.category)} ·{" "}
+                    {transaction.bank}
+                  </span>
+                </div>
+                <time
+                  className="operation-row__date"
+                  dateTime={transaction.date}
+                >
+                  {formatDisplayDate(transaction.date)}
+                </time>
+                <strong
+                  className={`operation-row__amount operation-row__amount--${
+                    transaction.amount >= 0 ? "green" : "red"
+                  }`}
+                >
+                  {formatMoney(transaction.amount)}
+                </strong>
+              </article>
             ))}
           </div>
-
-          <div className="analytics-date-row">
-            <label>
-              <span>С</span>
-              <input
-                type="date"
-                value={customFrom}
-                onChange={(event) => {
-                  setSelectedPeriod('custom');
-                  setCustomFrom(event.target.value);
-                }}
-              />
-            </label>
-            <label>
-              <span>По</span>
-              <input
-                type="date"
-                value={customTo}
-                onChange={(event) => {
-                  setSelectedPeriod('custom');
-                  setCustomTo(event.target.value);
-                }}
-              />
-            </label>
+        ) : (
+          <div className="operations-list__empty">
+            Операций за выбранный период нет
           </div>
-        </section>
-
-        {loadError && activeView === 'personal' && (
-          <div className="analytics-error">{loadError}</div>
         )}
 
-        <section className="analytics-stats-grid">
-          <StatCard title="Баланс за период" value={formatMoney(balance)} />
-          <StatCard title="Доходы" value={formatMoney(income)} tone="income" />
-          <StatCard title="Расходы" value={formatMoney(expenses)} tone="expense" />
-          <StatCard title="Операций" value={String(currentTransactions.length)} />
-        </section>
-
-        <section className="analytics-category-grid">
-          <CategoryBlock
-            title="Расходы по категориям"
-            items={expenseCategories}
-            emptyText="Расходов за выбранный период нет"
-            type="expense"
-          />
-          <CategoryBlock
-            title="Доходы по категориям"
-            items={incomeCategories}
-            emptyText="Доходов за выбранный период нет"
-            type="income"
-          />
-        </section>
-
-        <section className="analytics-card analytics-operations-card">
-          <div className="analytics-section-header">
-            <div>
-              <h2>Все операции</h2>
-              <p>{currentTransactions.length} операций за выбранный период</p>
-            </div>
-            <button className="analytics-export-button" type="button" onClick={handleExport}>
-              Экспортировать отчёт
-            </button>
-          </div>
-
-          {isLoading && activeView === 'personal' ? (
-            <div className="analytics-empty">Загружаем все личные операции...</div>
-          ) : visibleTransactions.length > 0 ? (
-            <div className="analytics-operation-list">
-              {visibleTransactions.map((transaction) => (
-                <article className="analytics-operation" key={transaction.id}>
-                  <div className={`analytics-operation-icon ${transaction.amount >= 0 ? 'income' : 'expense'}`}>
-                    {transaction.amount >= 0 ? '+' : '−'}
-                  </div>
-                  <div className="analytics-operation-main">
-                    <strong>{transaction.description || getCategoryLabel(transaction.category)}</strong>
-                    <span>
-                      {getCategoryLabel(transaction.category)} · {transaction.bank}
-                    </span>
-                    <small>{formatDisplayDate(transaction.date)}</small>
-                  </div>
-                  <strong className={`analytics-operation-amount ${transaction.amount >= 0 ? 'income' : 'expense'}`}>
-                    {formatMoney(transaction.amount)}
-                  </strong>
-                </article>
-              ))}
-            </div>
-          ) : (
-            <div className="analytics-empty">Операций за выбранный период нет</div>
-          )}
-
-          {currentTransactions.length > 8 && (
+        {currentTransactions.length > 0 && totalOperationPages > 1 && (
+          <div
+            className="operations-pagination"
+            aria-label="Пагинация операций"
+          >
             <button
-              className="analytics-show-more"
+              className="pagination-button"
               type="button"
-              onClick={() => setExpanded((value) => !value)}
+              onClick={() => changeOperationsPage(safeOperationsPage - 1)}
+              disabled={safeOperationsPage === 1}
             >
-              {expanded ? 'Свернуть' : 'Показать больше'}
+              Назад
             </button>
-          )}
-        </section>
+
+            <div className="pagination-pages">
+              {paginationItems.map((pageItem, index) => {
+                const previous = paginationItems[index - 1];
+                const hasGap = previous && pageItem - previous > 1;
+
+                return (
+                  <React.Fragment key={pageItem}>
+                    {hasGap && <span className="pagination-gap">…</span>}
+                    <button
+                      className={`pagination-page ${safeOperationsPage === pageItem ? "active" : ""}`}
+                      type="button"
+                      onClick={() => changeOperationsPage(pageItem)}
+                    >
+                      {pageItem}
+                    </button>
+                  </React.Fragment>
+                );
+              })}
+            </div>
+
+            <button
+              className="pagination-button"
+              type="button"
+              onClick={() => changeOperationsPage(safeOperationsPage + 1)}
+              disabled={safeOperationsPage === totalOperationPages}
+            >
+              Вперёд
+            </button>
+
+            <span className="pagination-info">
+              {rangeFrom}–{rangeTo} из {currentTransactions.length}
+            </span>
+          </div>
+        )}
+
+        <button
+          className="action-light operations-list__show-more"
+          type="button"
+          onClick={handleExport}
+        >
+          Экспортировать отчёт
+        </button>
       </section>
     </main>
-  );
-}
-
-function StatCard({
-  title,
-  value,
-  tone,
-}: {
-  title: string;
-  value: string;
-  tone?: 'income' | 'expense';
-}) {
-  return (
-    <article className={`analytics-stat-card ${tone || ''}`}>
-      <span>{title}</span>
-      <strong>{value}</strong>
-    </article>
   );
 }
 
@@ -648,34 +754,45 @@ function CategoryBlock({
   title: string;
   items: CategoryItem[];
   emptyText: string;
-  type: 'income' | 'expense';
+  type: "income" | "expense";
 }) {
   return (
-    <section className="analytics-card analytics-category-card">
-      <div className="analytics-section-header compact">
-        <h2>{title}</h2>
-      </div>
+    <section className="panel analytics-category-card">
+      <h2 className="section-title period-title">{title}</h2>
 
       {items.length > 0 ? (
         <div className="analytics-category-list">
           {items.map((item) => (
-            <div className="analytics-category-row" key={item.key}>
-              <div className="analytics-category-line">
-                <strong>{item.label}</strong>
-                <span>{item.percent}%</span>
-              </div>
-              <div className="analytics-category-track">
+            <article className="analytics-category-row" key={item.key}>
+              <div className="analytics-category-row__main">
+                <div className="analytics-category-row__top">
+                  <strong>{item.label}</strong>
+                  <span>{item.percent}%</span>
+                </div>
                 <div
-                  className={`analytics-category-fill ${type}`}
-                  style={{ width: `${Math.max(item.percent, 4)}%` }}
-                />
+                  className="analytics-category-progress"
+                  aria-hidden="true"
+                >
+                  <span
+                    className={`analytics-category-progress__fill ${
+                      type === "income" ? "green" : "red"
+                    }`}
+                    style={{ width: `${Math.min(item.percent, 100)}%` }}
+                  />
+                </div>
               </div>
-              <div className="analytics-category-value">{formatMoney(item.value)}</div>
-            </div>
+              <div
+                className={`analytics-category-row__amount ${
+                  type === "income" ? "green" : "red"
+                }`}
+              >
+                {formatMoney(item.value)}
+              </div>
+            </article>
           ))}
         </div>
       ) : (
-        <div className="analytics-empty small">{emptyText}</div>
+        <p className="member-mail">{emptyText}</p>
       )}
     </section>
   );

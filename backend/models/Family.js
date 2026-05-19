@@ -22,6 +22,22 @@ const familyMemberSchema = new Schema(
   { _id: false }
 );
 
+const categoryLimitSchema = new Schema(
+  {
+    category: {
+      type: String,
+      trim: true,
+      required: true,
+    },
+    limit: {
+      type: Number,
+      required: true,
+      min: 0,
+    },
+  },
+  { _id: false }
+);
+
 const familySchema = new Schema(
   {
     name: {
@@ -37,6 +53,10 @@ const familySchema = new Schema(
     },
     members: {
       type: [familyMemberSchema],
+      default: [],
+    },
+    categoryLimits: {
+      type: [categoryLimitSchema],
       default: [],
     },
   },

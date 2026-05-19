@@ -1,7 +1,22 @@
-import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type FormEvent,
+} from 'react';
 import { useNavigate } from 'react-router-dom';
-
 import { getCurrentUser, updateCurrentUser } from '../../../../api/auth';
+
+type ProfileUser = {
+  fullname?: string;
+  login?: string;
+  email?: string;
+  avatarUrl?: string;
+  settings?: {
+    emailNotifications?: boolean;
+  };
+};
 
 type ProfileForm = {
   fullname: string;
@@ -11,9 +26,6 @@ type ProfileForm = {
   currentPassword: string;
   newPassword: string;
   settings: {
-    currency: string;
-    language: string;
-    theme: 'light' | 'dark';
     emailNotifications: boolean;
   };
 };
@@ -26,16 +38,71 @@ const emptyForm: ProfileForm = {
   currentPassword: '',
   newPassword: '',
   settings: {
-    currency: 'RUB',
-    language: 'ru',
-    theme: 'light',
     emailNotifications: true,
   },
 };
 
+const getInitial = (form: ProfileForm) => {
+  const source = form.fullname || form.login || form.email || 'U';
+  return source.trim().charAt(0).toUpperCase();
+};
+
+const resizeAvatarFile = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    if (!file.type.startsWith('image/')) {
+      reject(new Error('Выберите файл изображения'));
+      return;
+    }
+
+    const reader = new FileReader();
+
+    reader.onerror = () => reject(new Error('Не удалось прочитать файл'));
+    reader.onload = () => {
+      const image = new Image();
+
+      image.onerror = () => reject(new Error('Не удалось обработать изображение'));
+      image.onload = () => {
+        const canvas = document.createElement('canvas');
+        const size = 360;
+        const sourceWidth = image.naturalWidth || image.width;
+        const sourceHeight = image.naturalHeight || image.height;
+        const sourceSize = Math.min(sourceWidth, sourceHeight);
+        const sourceX = Math.max((sourceWidth - sourceSize) / 2, 0);
+        const sourceY = Math.max((sourceHeight - sourceSize) / 2, 0);
+        const context = canvas.getContext('2d');
+
+        if (!context) {
+          reject(new Error('Браузер не поддерживает обработку изображения'));
+          return;
+        }
+
+        canvas.width = size;
+        canvas.height = size;
+        context.drawImage(
+          image,
+          sourceX,
+          sourceY,
+          sourceSize,
+          sourceSize,
+          0,
+          0,
+          size,
+          size
+        );
+
+        resolve(canvas.toDataURL('image/jpeg', 0.82));
+      };
+
+      image.src = String(reader.result || '');
+    };
+
+    reader.readAsDataURL(file);
+  });
+};
+
 export function ProfileSettingsSheet() {
   const navigate = useNavigate();
-
+  const avatarInputRef = useRef<HTMLInputElement | null>(null);
   const [form, setForm] = useState<ProfileForm>(emptyForm);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -48,7 +115,7 @@ export function ProfileSettingsSheet() {
     const loadProfile = async () => {
       try {
         const data = await getCurrentUser();
-        const user = data.user;
+        const user: ProfileUser = data.user || {};
 
         setForm({
           fullname: user.fullname || '',
@@ -58,9 +125,6 @@ export function ProfileSettingsSheet() {
           currentPassword: '',
           newPassword: '',
           settings: {
-            currency: user.settings?.currency || 'RUB',
-            language: user.settings?.language || 'ru',
-            theme: user.settings?.theme || 'light',
             emailNotifications: user.settings?.emailNotifications ?? true,
           },
         });
@@ -75,23 +139,18 @@ export function ProfileSettingsSheet() {
     loadProfile();
   }, [navigate]);
 
-  const handleChange = (event: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value, type } = event.target;
+  const handleChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const { name, value, type, checked } = event.target;
 
     if (name.startsWith('settings.')) {
-      const settingName = name.replace('settings.', '');
-
+      const settingName = name.replace('settings.', '') as keyof ProfileForm['settings'];
       setForm((prev) => ({
         ...prev,
         settings: {
           ...prev.settings,
-          [settingName]:
-            type === 'checkbox'
-              ? (event.target as HTMLInputElement).checked
-              : value,
+          [settingName]: type === 'checkbox' ? checked : value,
         },
       }));
-
       return;
     }
 
@@ -101,9 +160,36 @@ export function ProfileSettingsSheet() {
     }));
   };
 
-  const handleSave = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const handleAvatarChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
 
+    if (!file) return;
+
+    setError('');
+    setMessage('');
+
+    try {
+      const avatarUrl = await resizeAvatarFile(file);
+      setForm((prev) => ({
+        ...prev,
+        avatarUrl,
+      }));
+    } catch (avatarError: any) {
+      setError(avatarError.message || 'Не удалось загрузить аватар');
+    } finally {
+      event.target.value = '';
+    }
+  };
+
+  const handleRemoveAvatar = () => {
+    setForm((prev) => ({
+      ...prev,
+      avatarUrl: '',
+    }));
+  };
+
+  const handleSave = async (event: FormEvent) => {
+    event.preventDefault();
     setError('');
     setMessage('');
     setIsSaving(true);
@@ -120,20 +206,18 @@ export function ProfileSettingsSheet() {
       };
 
       const data = await updateCurrentUser(payload);
+      const user: ProfileUser = data.user || {};
 
       setForm((prev) => ({
         ...prev,
-        fullname: data.user.fullname || '',
-        login: data.user.login || '',
-        email: data.user.email || '',
-        avatarUrl: data.user.avatarUrl || '',
+        fullname: user.fullname || '',
+        login: user.login || '',
+        email: user.email || '',
+        avatarUrl: user.avatarUrl || '',
         currentPassword: '',
         newPassword: '',
         settings: {
-          currency: data.user.settings?.currency || 'RUB',
-          language: data.user.settings?.language || 'ru',
-          theme: data.user.settings?.theme || 'light',
-          emailNotifications: data.user.settings?.emailNotifications ?? true,
+          emailNotifications: user.settings?.emailNotifications ?? true,
         },
       }));
 
@@ -153,215 +237,132 @@ export function ProfileSettingsSheet() {
   };
 
   if (isLoading) {
-    return (
-      <section className="sheet">
-        <p>Загрузка профиля...</p>
-      </section>
-    );
+    return <div className="profile-settings-card">Загрузка профиля...</div>;
   }
 
   return (
-    <form className="sheet" onSubmit={handleSave}>
-      <div className="profile-header">
-        <h1>Настройки профиля</h1>
-      </div>
+    <section className="profile-settings-card">
+      <form className="profile-settings-form" onSubmit={handleSave}>
+        <div className="profile-settings-header">
+          <h1>Настройки профиля</h1>
+        </div>
 
-      <div className="avatar-circle">
-        {form.fullname ? form.fullname[0].toUpperCase() : 'U'}
-      </div>
+        <div className="profile-avatar-upload-row">
+          <div className="profile-avatar-preview" aria-hidden="true">
+            {form.avatarUrl ? (
+              <img src={form.avatarUrl} alt="" />
+            ) : (
+              <span>{getInitial(form)}</span>
+            )}
+          </div>
 
-      <div className="stack-fields">
-        <div>
-          <label className="field-label large" htmlFor="fullname">
-            ФИО
-          </label>
+          <div className="profile-avatar-controls">
+            <strong>Фото профиля</strong>
+            <span>Загрузите изображение — оно будет обрезано до квадратной аватарки.</span>
+
+            <div className="profile-avatar-actions">
+              <input
+                ref={avatarInputRef}
+                className="profile-avatar-input"
+                type="file"
+                accept="image/*"
+                onChange={handleAvatarChange}
+              />
+              <button
+                className="secondary-button"
+                type="button"
+                onClick={() => avatarInputRef.current?.click()}
+              >
+                Загрузить аватар
+              </button>
+              {form.avatarUrl && (
+                <button className="ghost-danger-button" type="button" onClick={handleRemoveAvatar}>
+                  Удалить
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <label className="profile-field">
+          <span>ФИО</span>
+          <input name="fullname" value={form.fullname} onChange={handleChange} required />
+        </label>
+
+        <label className="profile-field">
+          <span>Логин</span>
+          <input name="login" value={form.login} onChange={handleChange} required />
+        </label>
+
+        <label className="profile-field">
+          <span>Электронная почта</span>
+          <input name="email" type="email" value={form.email} onChange={handleChange} required />
+        </label>
+
+        <label className="profile-checkbox-row">
           <input
-            className="input-shell"
-            id="fullname"
-            name="fullname"
-            value={form.fullname}
-            onChange={handleChange}
-            required
-          />
-        </div>
-
-        <div>
-          <label className="field-label large" htmlFor="login">
-            Логин
-          </label>
-          <input
-            className="input-shell"
-            id="login"
-            name="login"
-            value={form.login}
-            onChange={handleChange}
-            required
-          />
-        </div>
-
-        <div>
-          <label className="field-label large" htmlFor="email">
-            Электронная почта
-          </label>
-          <input
-            className="input-shell"
-            id="email"
-            name="email"
-            type="email"
-            value={form.email}
-            onChange={handleChange}
-            required
-          />
-        </div>
-
-        <div>
-          <label className="field-label large" htmlFor="avatarUrl">
-            Ссылка на фото профиля
-          </label>
-          <input
-            className="input-shell"
-            id="avatarUrl"
-            name="avatarUrl"
-            value={form.avatarUrl}
-            onChange={handleChange}
-            placeholder="https://example.com/avatar.png"
-          />
-        </div>
-
-        <div>
-          <label className="field-label large" htmlFor="currency">
-            Валюта
-          </label>
-          <select
-            className="input-shell"
-            id="currency"
-            name="settings.currency"
-            value={form.settings.currency}
-            onChange={handleChange}
-          >
-            <option value="RUB">RUB</option>
-            <option value="USD">USD</option>
-            <option value="EUR">EUR</option>
-          </select>
-        </div>
-
-        <div>
-          <label className="field-label large" htmlFor="language">
-            Язык
-          </label>
-          <select
-            className="input-shell"
-            id="language"
-            name="settings.language"
-            value={form.settings.language}
-            onChange={handleChange}
-          >
-            <option value="ru">Русский</option>
-            <option value="en">English</option>
-          </select>
-        </div>
-
-        <div>
-          <label className="field-label large" htmlFor="theme">
-            Тема
-          </label>
-          <select
-            className="input-shell"
-            id="theme"
-            name="settings.theme"
-            value={form.settings.theme}
-            onChange={handleChange}
-          >
-            <option value="light">Светлая</option>
-            <option value="dark">Тёмная</option>
-          </select>
-        </div>
-
-        <label
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 10,
-            fontSize: 14,
-          }}
-        >
-          <input
-            type="checkbox"
             name="settings.emailNotifications"
+            type="checkbox"
             checked={form.settings.emailNotifications}
             onChange={handleChange}
           />
-          Email-уведомления
+          <span>Email-уведомления</span>
         </label>
 
         <button
-          className="inline-link"
+          className="profile-link-button"
           type="button"
           onClick={() => setShowPasswordBlock((value) => !value)}
-          style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, textAlign: 'left' }}
         >
           {showPasswordBlock ? 'Не менять пароль' : 'Сменить пароль'}
         </button>
 
         {showPasswordBlock && (
-          <>
-            <div>
-              <label className="field-label large" htmlFor="currentPassword">
-                Текущий пароль
-              </label>
+          <div className="profile-password-block">
+            <label className="profile-field">
+              <span>Текущий пароль</span>
               <input
-                className="input-shell"
-                id="currentPassword"
                 name="currentPassword"
                 type={showPassword ? 'text' : 'password'}
                 value={form.currentPassword}
                 onChange={handleChange}
               />
-            </div>
+            </label>
 
-            <div>
-              <label className="field-label large" htmlFor="newPassword">
-                Новый пароль
-              </label>
+            <label className="profile-field">
+              <span>Новый пароль</span>
               <input
-                className="input-shell"
-                id="newPassword"
                 name="newPassword"
                 type={showPassword ? 'text' : 'password'}
                 value={form.newPassword}
                 onChange={handleChange}
               />
-            </div>
+            </label>
 
             <button
-              className="inline-link"
+              className="profile-link-button"
               type="button"
               onClick={() => setShowPassword((value) => !value)}
-              style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, textAlign: 'left' }}
             >
               {showPassword ? 'Скрыть пароль' : 'Показать пароль'}
             </button>
-          </>
+          </div>
         )}
-      </div>
 
-      {error && <p style={{ color: '#d32f2f', margin: '12px 0 0', fontSize: 14 }}>{error}</p>}
-      {message && <p style={{ color: '#2e7d32', margin: '12px 0 0', fontSize: 14 }}>{message}</p>}
+        {error && <div className="profile-message profile-message--error">{error}</div>}
+        {message && <div className="profile-message profile-message--success">{message}</div>}
 
-      <div className="bottom-save">
-        <button className="primary-button" type="submit" disabled={isSaving}>
-          {isSaving ? 'Сохранение...' : 'Сохранить изменения'}
-        </button>
-      </div>
-
-      <button
-        className="danger-link"
-        type="button"
-        onClick={handleLogout}
-        style={{ border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, textAlign: 'left' }}
-      >
-        Выйти из профиля
-      </button>
-    </form>
+        <div className="profile-actions-row">
+          <button className="primary-button" type="submit" disabled={isSaving}>
+            {isSaving ? 'Сохранение...' : 'Сохранить изменения'}
+          </button>
+          <button className="danger-outline-button" type="button" onClick={handleLogout}>
+            Выйти из профиля
+          </button>
+        </div>
+      </form>
+    </section>
   );
 }
+
+export default ProfileSettingsSheet;

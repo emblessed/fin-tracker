@@ -5,6 +5,7 @@ export type FamilyMember = {
   fullname?: string;
   login?: string;
   email?: string;
+  avatarUrl?: string;
   role: 'owner' | 'member';
   joinedAt?: string;
 };
@@ -47,7 +48,6 @@ type RequestOptions = {
 
 async function familyRequest<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
   const token = localStorage.getItem('token');
-
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
   };
@@ -104,15 +104,27 @@ export const declineFamilyInvitation = (invitationId: string) => {
     `/api/auth/family/invitations/${invitationId}/decline`,
     {
       method: 'PATCH',
-    },
+    }
   );
+};
+
+export type FamilyTransactionUser = {
+  id?: string;
+  _id?: string;
+  fullname?: string;
+  login?: string;
+  email?: string;
+  name?: string;
 };
 
 export type FamilyTransaction = {
   _id?: string;
   id?: string;
   familyId?: string;
-  userId?: string;
+  userId?: string | FamilyTransactionUser;
+  user?: FamilyTransactionUser | null;
+  uploadedBy?: string;
+  source?: 'personal' | 'family';
   amount: number;
   date?: string;
   createdAt?: string;
@@ -135,6 +147,26 @@ export type FamilyTransactionsResponse = {
 
 export const getFamilyTransactions = (page = 1, limit = 200) => {
   return familyRequest<FamilyTransactionsResponse>(
-    `/api/family/transactions?page=${page}&limit=${limit}&sortBy=date&order=desc`,
+    `/api/family/transactions?page=${page}&limit=${limit}&sortBy=date&order=desc`
   );
+};
+
+export type FamilyCategoryLimit = {
+  category: string;
+  limit: number;
+};
+
+export type FamilyCategoryLimitsResponse = {
+  limits: FamilyCategoryLimit[];
+};
+
+export const getFamilyCategoryLimits = () => {
+  return familyRequest<FamilyCategoryLimitsResponse>('/api/family/category-limits');
+};
+
+export const saveFamilyCategoryLimits = (limits: FamilyCategoryLimit[]) => {
+  return familyRequest<FamilyCategoryLimitsResponse>('/api/family/category-limits', {
+    method: 'PUT',
+    body: { limits },
+  });
 };

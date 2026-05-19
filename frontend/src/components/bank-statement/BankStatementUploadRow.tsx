@@ -1,5 +1,4 @@
 import type { CSSProperties } from 'react';
-
 import { BankStatementUploadButton } from './BankStatementUploadButton';
 
 type UploadResult = {

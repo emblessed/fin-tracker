@@ -6,7 +6,6 @@ const dotenv = require('dotenv');
 const multer = require('multer');
 const mongoose = require('mongoose');
 const pdfjsLib = require('pdfjs-dist/legacy/build/pdf.js');
-
 const {
   identifyBank,
   findDateByOccurrence,
@@ -21,7 +20,6 @@ const Transaction = require('./models/Transaction');
 const Family = require('./models/Family');
 const FamilyTransaction = require('./models/FamilyTransaction');
 const auth = require('./middleware/auth');
-
 const authRoutes = require('./routes/auth');
 const fileRoutes = require('./routes/files');
 const transactionRoutes = require('./routes/transactions');
@@ -33,7 +31,6 @@ const upload = multer({ dest: 'uploads/' });
 
 app.use(cors({ origin: '*', exposedHeaders: ['Content-Disposition'] }));
 app.use(express.json());
-
 app.use('/api/auth', authRoutes);
 app.use('/api/files', fileRoutes);
 app.use('/api/transactions', transactionRoutes);
@@ -46,6 +43,180 @@ const removeUploadedFile = (file) => {
   if (file?.path && fs.existsSync(file.path)) {
     fs.unlinkSync(file.path);
   }
+};
+
+const getUserName = (user) => {
+  if (!user) return 'Участник семьи';
+
+  return (
+    user.fullname?.trim() ||
+    user.login?.trim() ||
+    user.email?.trim() ||
+    'Участник семьи'
+  );
+};
+
+const normalizeFamilyTransactionResponse = (transaction, source) => {
+  const user =
+    transaction.userId && typeof transaction.userId === 'object'
+      ? transaction.userId
+      : null;
+
+  const userDto = user
+    ? {
+        id: String(user._id),
+        fullname: user.fullname || '',
+        login: user.login || '',
+        email: user.email || '',
+        name: getUserName(user),
+      }
+    : null;
+
+  return {
+    ...transaction,
+    source,
+    userId: userDto?.id || String(transaction.userId || ''),
+    user: userDto,
+    uploadedBy: userDto?.name || 'Участник семьи',
+  };
+};
+
+const getSortValue = (item, field) => {
+  const value = item[field];
+
+  if (value === undefined || value === null) return 0;
+
+  if (field === 'date' || field === 'createdAt' || field === 'updatedAt') {
+    return new Date(value).getTime() || 0;
+  }
+
+  if (typeof value === 'number') {
+    return value;
+  }
+
+  return String(value);
+};
+
+const CATEGORY_LABELS = {
+  salary: 'Зарплата',
+  salaries: 'Зарплата',
+  income: 'Доходы',
+  transfer: 'Переводы',
+  transfers: 'Переводы',
+  withdrawal: 'Снятие наличных',
+  withdrawals: 'Снятие наличных',
+  atm: 'Снятие наличных',
+  refund: 'Возврат',
+  refunds: 'Возврат',
+  products: 'Продукты',
+  product: 'Продукты',
+  food: 'Еда',
+  groceries: 'Продукты',
+  grocery: 'Продукты',
+  supermarket: 'Супермаркеты',
+  supermarkets: 'Супермаркеты',
+  transport: 'Транспорт',
+  transportation: 'Транспорт',
+  taxi: 'Такси',
+  fuel: 'Топливо',
+  automobile: 'Автомобиль',
+  auto: 'Автомобиль',
+  car: 'Автомобиль',
+  cars: 'Автомобиль',
+  restaurant: 'Рестораны',
+  restaurants: 'Рестораны',
+  cafe: 'Кафе',
+  cafes: 'Кафе',
+  services: 'Услуги',
+  service: 'Услуги',
+  utilities: 'Коммунальные услуги',
+  cash: 'Наличные',
+  cloth: 'Одежда',
+  clothes: 'Одежда',
+  clothing: 'Одежда',
+  apparel: 'Одежда',
+  entertainment: 'Развлечения',
+  home: 'Дом',
+  house: 'Дом',
+  pharmacy: 'Аптеки',
+  pharmacies: 'Аптеки',
+  drugstore: 'Аптеки',
+  medicine: 'Аптеки',
+  health: 'Здоровье',
+  education: 'Образование',
+  shopping: 'Покупки',
+  beauty: 'Красота',
+  sport: 'Спорт',
+  sports: 'Спорт',
+  travel: 'Путешествия',
+  hotel: 'Отели',
+  hotels: 'Отели',
+  internet: 'Интернет',
+  mobile: 'Связь',
+  communication: 'Связь',
+  subscription: 'Подписки',
+  subscriptions: 'Подписки',
+  insurance: 'Страхование',
+  tax: 'Налоги',
+  taxes: 'Налоги',
+  fees: 'Комиссии',
+  fee: 'Комиссии',
+  qr: 'QR',
+  other: 'Другое',
+  others: 'Другое',
+  misc: 'Другое',
+  miscellaneous: 'Другое',
+};
+
+const normalizeCategoryLabel = (value) => {
+  const raw = String(value || '').trim();
+  const key = raw.toLowerCase();
+
+  if (!raw) return 'Другое';
+  if (CATEGORY_LABELS[key]) return CATEGORY_LABELS[key];
+  if (/^[a-z][a-z\s_-]*$/i.test(raw)) return 'Другое';
+
+  return raw;
+};
+
+const normalizeCategoryLimit = (item) => {
+  const category = normalizeCategoryLabel(item?.category);
+  const limit = Number(item?.limit);
+
+  if (!category || !Number.isFinite(limit) || limit <= 0) {
+    return null;
+  }
+
+  return {
+    category,
+    limit: Math.round(limit * 100) / 100,
+  };
+};
+
+const normalizeCategoryLimits = (limits) => {
+  if (!Array.isArray(limits)) {
+    return [];
+  }
+
+  const uniqueLimits = new Map();
+
+  limits.forEach((limit) => {
+    const normalizedLimit = normalizeCategoryLimit(limit);
+
+    if (!normalizedLimit) {
+      return;
+    }
+
+    uniqueLimits.set(normalizedLimit.category.toLowerCase(), normalizedLimit);
+  });
+
+  return Array.from(uniqueLimits.values())
+    .slice(0, 50)
+    .sort((a, b) => a.category.localeCompare(b.category, 'ru'));
+};
+
+const getCategoryLimitsDto = (family) => {
+  return normalizeCategoryLimits(family?.categoryLimits || []);
 };
 
 app.post('/api/transactions/upload-pdf', auth, upload.single('file'), async (req, res) => {
@@ -69,6 +240,7 @@ app.post('/api/transactions/upload-pdf', auth, upload.single('file'), async (req
   } catch (error) {
     console.error('Ошибка при загрузке и обработке PDF:', error);
     removeUploadedFile(req.file);
+
     res.status(500).json({
       message: 'Ошибка сервера при обработке выписки',
       error: error.message,
@@ -87,18 +259,62 @@ app.get('/api/family/transactions', auth, async (req, res) => {
     const page = Math.max(Number(req.query.page) || 1, 1);
     const limit = Math.min(Math.max(Number(req.query.limit) || 200, 1), 200);
     const skip = (page - 1) * limit;
-    const sortBy = typeof req.query.sortBy === 'string' ? req.query.sortBy : 'date';
+
+    const allowedSortFields = [
+      'date',
+      'amount',
+      'balance',
+      'transactionNum',
+      'createdAt',
+      'updatedAt',
+    ];
+
+    const sortBy = allowedSortFields.includes(req.query.sortBy)
+      ? req.query.sortBy
+      : 'date';
+
     const order = req.query.order === 'asc' ? 1 : -1;
 
-    const query = { familyId: family._id };
+    const memberIds = (family.members || [])
+      .map((member) => member.user)
+      .filter(Boolean);
 
-    const [data, total] = await Promise.all([
-      FamilyTransaction.find(query)
-        .sort({ [sortBy]: order })
-        .skip(skip)
-        .limit(limit),
-      FamilyTransaction.countDocuments(query),
+    const [personalTransactions, familyTransactions] = await Promise.all([
+      Transaction.find({
+        userId: { $in: memberIds },
+      })
+        .populate('userId', 'fullname login email')
+        .lean(),
+
+      FamilyTransaction.find({
+        familyId: family._id,
+      })
+        .populate('userId', 'fullname login email')
+        .lean(),
     ]);
+
+    const mergedTransactions = [
+      ...personalTransactions.map((transaction) =>
+        normalizeFamilyTransactionResponse(transaction, 'personal')
+      ),
+      ...familyTransactions.map((transaction) =>
+        normalizeFamilyTransactionResponse(transaction, 'family')
+      ),
+    ];
+
+    mergedTransactions.sort((a, b) => {
+      const aValue = getSortValue(a, sortBy);
+      const bValue = getSortValue(b, sortBy);
+
+      if (typeof aValue === 'string' || typeof bValue === 'string') {
+        return String(aValue).localeCompare(String(bValue), 'ru') * order;
+      }
+
+      return (aValue - bValue) * order;
+    });
+
+    const total = mergedTransactions.length;
+    const data = mergedTransactions.slice(skip, skip + limit);
 
     res.json({
       data,
@@ -109,7 +325,10 @@ app.get('/api/family/transactions', auth, async (req, res) => {
     });
   } catch (error) {
     console.error('Ошибка загрузки семейных транзакций:', error);
-    res.status(500).json({ message: 'Ошибка сервера при загрузке семейных транзакций' });
+    res.status(500).json({
+      message: 'Ошибка сервера при загрузке семейных транзакций',
+      error: error.message,
+    });
   }
 });
 
@@ -144,8 +363,49 @@ app.post('/api/family/transactions/upload-pdf', auth, upload.single('file'), asy
   } catch (error) {
     console.error('Ошибка при загрузке и обработке семейной PDF-выписки:', error);
     removeUploadedFile(req.file);
+
     res.status(500).json({
       message: 'Ошибка сервера при обработке семейной выписки',
+      error: error.message,
+    });
+  }
+});
+
+app.get('/api/family/category-limits', auth, async (req, res) => {
+  try {
+    const family = await getCurrentFamily(req.user.userId);
+
+    if (!family) {
+      return res.status(400).json({ message: 'У пользователя нет семьи' });
+    }
+
+    res.json({ limits: getCategoryLimitsDto(family) });
+  } catch (error) {
+    console.error('Ошибка загрузки лимитов категорий:', error);
+    res.status(500).json({
+      message: 'Ошибка сервера при загрузке лимитов категорий',
+      error: error.message,
+    });
+  }
+});
+
+app.put('/api/family/category-limits', auth, async (req, res) => {
+  try {
+    const family = await getCurrentFamily(req.user.userId);
+
+    if (!family) {
+      return res.status(400).json({ message: 'У пользователя нет семьи' });
+    }
+
+    const normalizedLimits = normalizeCategoryLimits(req.body?.limits);
+    family.categoryLimits = normalizedLimits;
+    await family.save();
+
+    res.json({ limits: getCategoryLimitsDto(family) });
+  } catch (error) {
+    console.error('Ошибка сохранения лимитов категорий:', error);
+    res.status(500).json({
+      message: 'Ошибка сервера при сохранении лимитов категорий',
       error: error.message,
     });
   }
@@ -178,6 +438,7 @@ async function scanPdf(filePath, userId, options = {}) {
     const fullDocData = await extractAllPagesData(pdf);
     const { bank: detectedBank } = identifyBank(fullDocData);
     const totalSaved = await aboutTransaction(fullDocData, detectedBank, userId, options);
+
     console.log('Обработка полностью завершена');
     return totalSaved;
   } catch (error) {
@@ -216,6 +477,7 @@ async function aboutTransaction(docItems, bankName, userId, options = {}) {
   const TransactionModel = options.model || Transaction;
   const extraFields = options.extraFields || {};
   const totalPages = docItems.length > 0 ? Math.max(...docItems.map((i) => i.page)) : 0;
+
   let globalTransactionNum = 1;
   let lastBalance = null;
   let totalSavedTransactions = 0;
@@ -271,6 +533,7 @@ async function aboutTransaction(docItems, bankName, userId, options = {}) {
         const cleanBalance = parseMoneyToNumber(item.money.balance);
         const rawCategory = item.category || 'Не определено';
         const categoryDataTransformed = categoryTransform(rawCategory);
+
         let finalAmount = cleanAmount;
 
         if (lastBalance !== null) {

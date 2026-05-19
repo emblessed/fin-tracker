@@ -20,18 +20,25 @@ type OperationFormProps = {
 
 const categoryOptions = [
   { value: 'salary', label: 'Зарплата' },
-  { value: 'products', label: 'Еда' },
+  { value: 'products', label: 'Продукты' },
   { value: 'transfers', label: 'Переводы' },
   { value: 'transport', label: 'Транспорт' },
   { value: 'restaurant', label: 'Рестораны' },
   { value: 'services', label: 'Услуги' },
   { value: 'cash', label: 'Наличные' },
+  { value: 'pharmacy', label: 'Аптеки' },
+  { value: 'automobile', label: 'Автомобиль' },
+  { value: 'clothes', label: 'Одежда' },
+  { value: 'entertainment', label: 'Развлечения' },
+  { value: 'home', label: 'Дом' },
+  { value: 'qr', label: 'QR' },
   { value: 'others', label: 'Другое' },
 ];
 
 const today = () => new Date().toISOString().slice(0, 10);
 
-const getDefaultCategory = (type: OperationType) => (type === 'income' ? 'salary' : 'products');
+const getDefaultCategory = (type: OperationType) =>
+  type === 'income' ? 'salary' : 'products';
 
 const OperationForm: React.FC<OperationFormProps> = ({ onCreated }) => {
   const [description, setDescription] = useState('');
@@ -65,6 +72,13 @@ const OperationForm: React.FC<OperationFormProps> = ({ onCreated }) => {
     event.preventDefault();
     setNotice('');
 
+    const token = localStorage.getItem('token');
+
+    if (!token) {
+      setNotice('Сессия не найдена. Войдите в аккаунт заново.');
+      return;
+    }
+
     const numericAmount = Number(String(amount).replace(',', '.'));
 
     if (!Number.isFinite(numericAmount) || numericAmount <= 0) {
@@ -74,13 +88,14 @@ const OperationForm: React.FC<OperationFormProps> = ({ onCreated }) => {
 
     const finalAmount = type === 'income' ? numericAmount : -numericAmount;
     const selectedCategoryLabel =
-      categoryOptions.find((category) => category.value === categoryInfo)?.label || 'Операция';
+      categoryOptions.find((category) => category.value === categoryInfo)?.label ||
+      'Операция';
 
     const payload = {
       date,
       amount: finalAmount,
       category: categoryInfo,
-      categoryInfo,
+      categoryInfo: selectedCategoryLabel,
       bank: 'Ручная операция',
       commentary: description.trim() || selectedCategoryLabel,
     };
@@ -92,6 +107,7 @@ const OperationForm: React.FC<OperationFormProps> = ({ onCreated }) => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify(payload),
       });
@@ -124,38 +140,36 @@ const OperationForm: React.FC<OperationFormProps> = ({ onCreated }) => {
   };
 
   return (
-    <section className="panel form-card">
-      <h2 className="section-title">Новая операция</h2>
+    <section className="panel operation-form">
+      <h2 className="operation-form__title">Новая операция</h2>
 
-      <form onSubmit={handleSubmit}>
-        <div className="field-grid">
-          <label className="field full">
-            <span className="field-label">Описание</span>
+      <form className="operation-form__form" onSubmit={handleSubmit}>
+        <div className="operation-form__fields">
+          <label className="operation-form__field operation-form__field--description">
+            <span>Описание</span>
             <input
-              className="input-like"
+              type="text"
               value={description}
               onChange={(event) => setDescription(event.target.value)}
               placeholder="Например: Продукты, Зарплата"
             />
           </label>
 
-          <label className="field">
-            <span className="field-label">Сумма (₽)</span>
+          <label className="operation-form__field">
+            <span>Сумма (₽)</span>
             <input
-              className="input-like"
               type="number"
-              min="0"
-              step="0.01"
               value={amount}
               onChange={(event) => setAmount(event.target.value)}
+              min="0"
+              step="0.01"
               required
             />
           </label>
 
-          <label className="field">
-            <span className="field-label">Тип</span>
+          <label className="operation-form__field">
+            <span>Тип</span>
             <select
-              className="select-like"
               value={type}
               onChange={(event) => handleTypeChange(event.target.value as OperationType)}
             >
@@ -164,25 +178,23 @@ const OperationForm: React.FC<OperationFormProps> = ({ onCreated }) => {
             </select>
           </label>
 
-          <label className="field">
-            <span className="field-label">Категория</span>
+          <label className="operation-form__field">
+            <span>Категория</span>
             <select
-              className="select-like"
               value={categoryInfo}
               onChange={(event) => setCategoryInfo(event.target.value)}
             >
               {categoryOptions.map((category) => (
-                <option value={category.value} key={category.value}>
+                <option key={category.value} value={category.value}>
                   {category.label}
                 </option>
               ))}
             </select>
           </label>
 
-          <label className="field">
-            <span className="field-label">Дата</span>
+          <label className="operation-form__field">
+            <span>Дата</span>
             <input
-              className="input-like"
               type="date"
               value={date}
               onChange={(event) => setDate(event.target.value)}
@@ -191,11 +203,10 @@ const OperationForm: React.FC<OperationFormProps> = ({ onCreated }) => {
           </label>
         </div>
 
-        {notice && <div className="form-notice">{notice}</div>}
+        {notice && <p className="operation-form__notice">{notice}</p>}
 
-        <button className="primary-button margin-top-22" type="submit" disabled={isSaving}>
-          <span className="plus">+</span>
-          {isSaving ? 'Добавляем...' : 'Добавить операцию'}
+        <button className="operation-form__submit" type="submit" disabled={isSaving}>
+          + {isSaving ? 'Добавляем...' : 'Добавить операцию'}
         </button>
       </form>
     </section>

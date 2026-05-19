@@ -1,26 +1,38 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { loginUser } from '../api/auth';
+
+const saveAuthSession = (data: any) => {
+  const token = data?.token || data?.accessToken;
+
+  if (token) {
+    localStorage.setItem('token', token);
+  }
+
+  if (data?.user) {
+    localStorage.setItem('user', JSON.stringify(data.user));
+  }
+
+  return Boolean(token);
+};
 
 export default function SignedUp() {
   const navigate = useNavigate();
 
-
   const [formData, setFormData] = useState({
     login: '',
-    password: ''
+    password: '',
   });
-
-
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
+
+    setFormData((prev) => ({
       ...prev,
-      [name]: value
+      [name]: value,
     }));
   };
 
@@ -31,91 +43,96 @@ export default function SignedUp() {
 
     try {
       const data = await loginUser(formData);
-      
+      const hasToken = saveAuthSession(data);
 
-      if (data.token) {
-        localStorage.setItem('token', data.token);
+      if (!hasToken) {
+        throw new Error('Сервер не вернул токен авторизации');
       }
 
-      alert("Вход выполнен успешно!");
+      window.dispatchEvent(new Event('profile:changed'));
+
+      alert('Вход выполнен успешно!');
       navigate('/main');
-      
     } catch (err: any) {
-      setError(err.message);
+      setError(err.message || 'Ошибка входа');
     } finally {
       setIsLoading(false);
     }
   };
 
-
-
   return (
-    <div className="form">
-      <h1>Вход</h1>
+    <main className="auth-page">
+      <div className="form auth-form">
+        <h1>Вход</h1>
 
-      {/* Вывод ошибки от сервера */}
-      {error && <div style={{ color: 'red', marginBottom: '10px' }}>{error}</div>}
+        {error && <div className="auth-error">{error}</div>}
 
-      <form onSubmit={handleSubmit}>
-        <div>
-          <label htmlFor="login">
-            Логин или электронная почта <span className="warning">*</span>
+        <form onSubmit={handleSubmit}>
+          <div>
+            <label htmlFor="login">
+              Логин или электронная почта <span className="warning">*</span>
+            </label>
+            <br />
+            <input
+              type="text"
+              id="login"
+              name="login"
+              placeholder="login"
+              value={formData.login}
+              onChange={handleChange}
+              required
+            />
+          </div>
+
+          <div className="passwordField auth-password-field">
+            <label htmlFor="password">
+              Пароль <span className="warning">*</span>
+            </label>
+            <br />
+            <input
+              type={showPassword ? 'text' : 'password'}
+              id="password"
+              name="password"
+              className="passwordPadding"
+              placeholder="••••••••"
+              value={formData.password}
+              onChange={handleChange}
+              required
+            />
+            <button
+              type="button"
+              className="password-toggle"
+              aria-label={showPassword ? 'Скрыть пароль' : 'Показать пароль'}
+              aria-pressed={showPassword}
+              onClick={() => setShowPassword((current) => !current)}
+            >
+              <span className={`eye-icon ${showPassword ? 'eye-closed' : 'eye-open'}`} />
+            </button>
+          </div>
+
+          <label className="auth-checkbox-row" htmlFor="rememberMe">
+            <input type="checkbox" id="rememberMe" name="rememberMe" />
+            <span>Запомнить меня</span>
           </label>
-          <br />
-          <input
-            type="text"
-            id="login"
-            name="login" // Должно совпадать с ключом в formData
-            placeholder="login"
-            value={formData.login}
-            onChange={handleChange}
-            required
-          />
-        </div>
 
-        <div className="passwordField">
-          <label htmlFor="password">
-            Пароль <span className="warning">*</span>
-          </label>
-          <br />
-          <input
-            type="password"
-            id="password"
-            name="password"
-            className="passwordPadding"
-            placeholder="••••••••"
-            value={formData.password}
-            onChange={handleChange}
-            required
-          />
-          
-          <input type="checkbox" id="seePassword" className="toggle-checkbox" />
-          <label htmlFor="seePassword" className="toggle-label">
-            <span className="eye-icon eye-open"></span>
-          </label>
-        </div>
+          <div className="auth-actions">
+            <button type="submit" disabled={isLoading}>
+              {isLoading ? 'Проверка...' : 'Войти'}
+            </button>
 
-        <div>
-          <input type="checkbox" id="rememberMe" name="rememberMe" />
-          <label className="smallLabel" htmlFor="rememberMe">Запомнить меня</label>
-        </div>
+            <p className="smallLabel textCentered auth-link-row">
+              Нет аккаунта?{' '}
+              <Link className="auth-blue-link" to="/register">
+                Зарегистрироваться
+              </Link>
+            </p>
 
-        <div style={{ marginTop: '20px' }}>
-          <button type="submit" disabled={isLoading}>
-            {isLoading ? 'Проверка...' : 'Войти'}
-          </button>
-          
-          <p className="smallLabel textCentered">
-            Нет аккаунта? <Link to="/register">Зарегистрироваться</Link>
-          </p>
-          
-          <p className="smallLabel textCentered">
-            <a href="/passwordRecovery.html">Забыли пароль?</a>
-          </p>
-          
-          <button type="button" onClick={() => navigate(-1)}>Назад</button>
-        </div>
-      </form>
-    </div>
+            <button className="auth-back-button" type="button" onClick={() => navigate(-1)}>
+              Назад
+            </button>
+          </div>
+        </form>
+      </div>
+    </main>
   );
 }
