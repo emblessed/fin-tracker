@@ -5,7 +5,7 @@ type ExportButtonProps = {
   apiUrl?: string;
 };
 
-const DEFAULT_API_URL = 'http://localhost:5000';
+const DEFAULT_API_URL = '';
 
 function getFileNameFromHeader(header: string | null, fallbackName: string) {
   if (!header) {

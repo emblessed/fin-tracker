@@ -11,7 +11,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { getFamilyStatus, type FamilyStatus } from '../api/family';
 import { InvitationsModal } from './invitations/InvitationsModal';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const API_URL = import.meta.env.VITE_API_URL || '';
 const DROPDOWN_WIDTH = 205;
 const DROPDOWN_GAP = 8;
 const SCREEN_PADDING = 12;

@@ -13,7 +13,7 @@ type BankStatementUploadButtonProps = {
   onSuccess?: (result: UploadResult) => void | Promise<void>;
 };
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const API_URL = import.meta.env.VITE_API_URL || '';
 
 export function BankStatementUploadButton({
   label = 'Загрузить PDF-выписку',

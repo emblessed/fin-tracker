@@ -9,7 +9,7 @@ type StoredFile = {
   uploadDate: string;
 };
 
-const API_URL = 'http://localhost:5000';
+const API_URL = '';
 
 function formatFileSize(size: number) {
   if (size < 1024) {
@@ -33,7 +33,7 @@ export default  function AdminUploadPage() {
   async function loadFiles() {
     try {
       setIsLoadingFiles(true);
-      const response = await fetch(`${API_URL}/files`);
+    const response = await fetch(`${API_URL}/api/files`);
 
       if (!response.ok) {
         throw new Error('Не удалось получить список файлов');
@@ -74,7 +74,7 @@ export default  function AdminUploadPage() {
       setIsUploading(true);
       setMessage('');
 
-      const response = await fetch(`${API_URL}/files/upload`, {
+      const response = await fetch(`${API_URL}/api/files/upload`, {
         method: 'POST',
         body: formData,
       });
@@ -154,7 +154,7 @@ export default  function AdminUploadPage() {
                     </div>
                   </div>
                   <a
-                    href={`${API_URL}/files/${file._id}/download`}
+                    href={`${API_URL}/api/files/${file._id}/download`}
                     style={styles.link}
                   >
                     Скачать
