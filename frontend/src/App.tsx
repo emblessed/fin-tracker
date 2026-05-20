@@ -17,7 +17,6 @@ import { FamilyPage } from "./pages/family/FamilyPage.tsx";
 import FamilyAnalyticsPage from "./pages/family/FamilyAnalyticsPage.tsx";
 import ProfileSettingsPage from "./pages/account/pages/ProfileSettingsPage.tsx";
 import ProtectedRoute from "./api/ProtectedRoute.tsx";
-import Dashboard from "./dashboard.tsx";
 
 type AppRoute = {
   path: string;

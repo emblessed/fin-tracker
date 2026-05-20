@@ -142,13 +142,13 @@ export function ProfileSettingsSheet() {
   const handleChange = (event: ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = event.target;
 
-    if (name.startsWith('settings.')) {
+if (name.startsWith('settings.')) {
       const settingName = name.replace('settings.', '') as keyof ProfileForm['settings'];
       setForm((prev) => ({
         ...prev,
         settings: {
           ...prev.settings,
-          [settingName]: type === 'checkbox' ? checked : value,
+          [settingName]: (type === 'checkbox' ? checked : value) as any,
         },
       }));
       return;

@@ -146,7 +146,7 @@ const CashFlowChart: React.FC<CashFlowChartProps> = ({ transactions }) => {
             font: {
               family: 'Inter, system-ui, sans-serif',
               size: 12,
-              weight: '800',
+              weight: 'bold',
             },
             usePointStyle: true,
           },
@@ -169,7 +169,7 @@ const CashFlowChart: React.FC<CashFlowChartProps> = ({ transactions }) => {
           ticks: {
             color: '#718096',
             font: {
-              weight: '700',
+              weight: 'bold',
             },
           },
         },
@@ -182,7 +182,7 @@ const CashFlowChart: React.FC<CashFlowChartProps> = ({ transactions }) => {
             callback: (value) => formatCurrency(Number(value)).replace(',00', ''),
             color: '#718096',
             font: {
-              weight: '700',
+              weight: 'bold',
             },
           },
         },

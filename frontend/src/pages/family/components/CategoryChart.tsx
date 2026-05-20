@@ -35,7 +35,7 @@ export function CategoryChart({
           {legend.map((item) => (
             <div key={item.label} className="legend-row">
               <div className="legend-left">
-                <span className={`legend-dot ${item.tone}`} />
+                <span className={`legend-dot ${(item as any).tone}`} /> 
                 <span>{item.label}</span>
               </div>
 
