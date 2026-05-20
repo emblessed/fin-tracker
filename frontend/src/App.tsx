@@ -12,7 +12,6 @@ import PeriodSelector from "./components/PeriodSelector.tsx";
 import StatsCards from "./components/StatsCards.tsx";
 import { BankStatementUploadRow } from "./components/bank-statement";
 import AnalyticsPage from "./pages/analytics/AnalyticsPage.tsx";
-import AdminUploadPage from "./pages/admin/AdminUploadPage.tsx";
 import { FamilyPage } from "./pages/family/FamilyPage.tsx";
 import FamilyAnalyticsPage from "./pages/family/FamilyAnalyticsPage.tsx";
 import ProfileSettingsPage from "./pages/account/pages/ProfileSettingsPage.tsx";
@@ -244,12 +243,6 @@ const mainRoutes: AppRoute[] = [
   },
 ];
 
-const adminRoutes: AppRoute[] = [
-  {
-    path: "/admin/upload",
-    element: withProtectedHeader(<AdminUploadPage />),
-  },
-];
 
 const familyRoutes: AppRoute[] = [
   {
@@ -311,7 +304,6 @@ const systemRoutes: AppRoute[] = [
 const groupedRoutes: AppRoute[] = [
   ...publicRoutes,
   ...mainRoutes,
-  ...adminRoutes,
   ...familyRoutes,
   ...accountRoutes,
   ...systemRoutes,
